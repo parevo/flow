@@ -107,6 +107,16 @@ go get github.com/parevo/flow
 
 ---
 
+## 🏗️ Production Readiness (High-Load)
+
+For handling millions of workloads, ensure your DB connection pool is tuned:
+
+```go
+db.SetMaxOpenConns(100)
+db.SetMaxIdleConns(25)
+db.SetConnMaxLifetime(5 * time.Minute)
+```
+
 ## 🤝 Contributing
 Contributions are welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for details.
 

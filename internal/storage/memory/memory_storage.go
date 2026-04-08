@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/parevo/flow/internal/models"
 )
@@ -115,12 +116,15 @@ func (s *MemoryStorage) GetExecutionSteps(ctx context.Context, namespace string,
 func (s *MemoryStorage) ClaimReadyStep(ctx context.Context, namespace string, workerID string) (*models.ExecutionStep, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	now := time.Now()
 	for _, step := range s.executionSteps {
 		if step.Status == models.TaskPending {
 			if namespace == "" || step.Namespace == namespace {
-				step.Status = models.TaskRunning
-				step.WorkerID = workerID
-				return step, nil
+				if step.ScheduledAt == nil || step.ScheduledAt.Before(now) {
+					step.Status = models.TaskRunning
+					step.WorkerID = workerID
+					return step, nil
+				}
 			}
 		}
 	}

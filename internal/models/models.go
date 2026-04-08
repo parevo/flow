@@ -82,6 +82,7 @@ type ExecutionStep struct {
 	AttemptNumber int               `json:"attemptNumber" db:"attempt_number"`
 	WorkerID      string            `json:"workerId,omitempty" db:"worker_id"`
 	Labels        map[string]string `json:"labels" db:"-"`
+	ScheduledAt   *time.Time        `json:"scheduledAt,omitempty" db:"scheduled_at"`
 	StartedAt     time.Time         `json:"startedAt" db:"started_at"`
 	FinishedAt    *time.Time        `json:"finishedAt,omitempty" db:"finished_at"`
 }

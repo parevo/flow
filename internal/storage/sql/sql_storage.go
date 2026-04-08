@@ -145,24 +145,24 @@ func (s *SQLStorage) UpdateExecution(ctx context.Context, namespace string, exec
 
 func (s *SQLStorage) CreateExecutionStep(ctx context.Context, namespace string, step *models.ExecutionStep) error {
 	step.Namespace = namespace
-	query := `INSERT INTO execution_steps (id, namespace, execution_id, node_id, status, input, started_at)
-			  VALUES (?, ?, ?, ?, ?, ?, ?)`
+	query := `INSERT INTO execution_steps (id, namespace, execution_id, node_id, status, input, scheduled_at, started_at)
+			  VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
 	if _, ok := s.dialect.(PostgresDialect); ok {
-		query = `INSERT INTO execution_steps (id, namespace, execution_id, node_id, status, input, started_at)
-				  VALUES ($1, $2, $3, $4, $5, $6, $7)`
+		query = `INSERT INTO execution_steps (id, namespace, execution_id, node_id, status, input, scheduled_at, started_at)
+				  VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`
 	}
 	_, err := s.db.ExecContext(ctx, query,
-		step.ID, step.Namespace, step.ExecutionID, step.NodeID, step.Status, step.Input, step.StartedAt)
+		step.ID, step.Namespace, step.ExecutionID, step.NodeID, step.Status, step.Input, step.ScheduledAt, step.StartedAt)
 	return err
 }
 
 func (s *SQLStorage) UpdateExecutionStep(ctx context.Context, namespace string, step *models.ExecutionStep) error {
-	query := `UPDATE execution_steps SET status = ?, output = ?, error = ?, finished_at = ?, attempt_number = ? WHERE id = ? AND namespace = ?`
+	query := `UPDATE execution_steps SET status = ?, output = ?, error = ?, finished_at = ?, attempt_number = ?, scheduled_at = ? WHERE id = ? AND namespace = ?`
 	if _, ok := s.dialect.(PostgresDialect); ok {
-		query = `UPDATE execution_steps SET status = $1, output = $2, error = $3, finished_at = $4, attempt_number = $5 WHERE id = $6 AND namespace = $7`
+		query = `UPDATE execution_steps SET status = $1, output = $2, error = $3, finished_at = $4, attempt_number = $5, scheduled_at = $6 WHERE id = $7 AND namespace = $8`
 	}
 	_, err := s.db.ExecContext(ctx, query,
-		step.Status, step.Output, step.Error, step.FinishedAt, step.AttemptNumber, step.ID, namespace)
+		step.Status, step.Output, step.Error, step.FinishedAt, step.AttemptNumber, step.ScheduledAt, step.ID, namespace)
 	return err
 }
 
@@ -183,10 +183,10 @@ func (s *SQLStorage) ClaimReadyStep(ctx context.Context, namespace string, worke
 	}
 	defer tx.Rollback()
 
-	query := "SELECT * FROM execution_steps WHERE status = 'PENDING'"
-	args := []interface{}{}
+	query := "SELECT * FROM execution_steps WHERE status = 'PENDING' AND (scheduled_at IS NULL OR scheduled_at <= ?)"
+	args := []interface{}{time.Now()}
 	if namespace != "" {
-		query += " AND namespace = ?"
+		query = "SELECT * FROM execution_steps WHERE status = 'PENDING' AND (scheduled_at IS NULL OR scheduled_at <= ?) AND namespace = ?"
 		args = append(args, namespace)
 	}
 	query += " LIMIT 1"
@@ -195,10 +195,10 @@ func (s *SQLStorage) ClaimReadyStep(ctx context.Context, namespace string, worke
 	// Convert placeholders if Postgres
 	if _, ok := s.dialect.(PostgresDialect); ok {
 		if namespace != "" {
-			query = "SELECT * FROM execution_steps WHERE status = 'PENDING' AND namespace = $1 LIMIT 1"
+			query = "SELECT * FROM execution_steps WHERE status = 'PENDING' AND (scheduled_at IS NULL OR scheduled_at <= $1) AND namespace = $2 LIMIT 1"
 			query = s.dialect.SkipLocked(query)
 		} else {
-			query = "SELECT * FROM execution_steps WHERE status = 'PENDING' LIMIT 1"
+			query = "SELECT * FROM execution_steps WHERE status = 'PENDING' AND (scheduled_at IS NULL OR scheduled_at <= $1) LIMIT 1"
 			query = s.dialect.SkipLocked(query)
 		}
 	}

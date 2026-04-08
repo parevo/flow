@@ -59,16 +59,38 @@ func (w *Worker) processOne(ctx context.Context) {
 		return // No work
 	}
 
+	GetTelemetry().IncProcessed()
 	log.Printf("Worker %s: processing step %s (Namespace: %s, Node: %s)\n", w.id, step.ID, step.Namespace, step.NodeID)
 
 	// Execute node logic
 	output, err := w.executeStep(ctx, step)
 	if err != nil {
-		log.Printf("Worker %s: step %s failed: %v\n", w.id, step.ID, err)
+		log.Printf("Worker %s: step %s failed (Attempt %d): %v\n", w.id, step.ID, step.AttemptNumber, err)
+		
+		// HIGH-LOAD: Handle retries with Exponential Backoff
+		maxRetries := 5
+		if step.AttemptNumber < maxRetries {
+			step.AttemptNumber++
+			
+			// Exponential Backoff: 2^attempt * 10 seconds
+			delay := time.Duration(1<<uint(step.AttemptNumber)) * 10 * time.Second
+			nextScheduled := time.Now().Add(delay)
+			step.ScheduledAt = &nextScheduled
+			step.Status = models.TaskPending
+			step.Error = err.Error()
+			
+			log.Printf("Worker %s: rescheduling step %s for %v\n", w.id, step.ID, nextScheduled.Format(time.RFC3339))
+			GetTelemetry().IncRetried()
+			w.engine.storage.UpdateExecutionStep(ctx, step.Namespace, step)
+			return
+		}
+
+		// Hard Fail after max retries
 		step.Status = models.TaskFailed
-		step.Error = err.Error()
+		step.Error = fmt.Sprintf("Max retries reached: %v", err)
 		now := time.Now()
 		step.FinishedAt = &now
+		GetTelemetry().IncFailed()
 		w.engine.storage.UpdateExecutionStep(ctx, step.Namespace, step)
 		return
 	}
