@@ -44,6 +44,11 @@ func (nb *NodeBuilder) WithConfig(key string, value interface{}) *NodeBuilder {
 	return nb
 }
 
+func (nb *NodeBuilder) WithSaga(compensateNodeID string) *NodeBuilder {
+	nb.node.CompensateNodeID = compensateNodeID
+	return nb
+}
+
 func (nb *NodeBuilder) WithRetry(count int) *NodeBuilder {
 	nb.node.RetryCount = count
 	return nb

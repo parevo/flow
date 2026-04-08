@@ -81,8 +81,17 @@ func (g *Graph) Validate() error {
 // GetInitialNodes returns nodes with no predecessors
 func (g *Graph) GetInitialNodes() []string {
 	ids := []string{}
+	
+	// Find all nodes that are referenced as a CompensateNodeID
+	compensations := make(map[string]bool)
+	for _, node := range g.Nodes {
+		if node.CompensateNodeID != "" {
+			compensations[node.CompensateNodeID] = true
+		}
+	}
+
 	for id, d := range g.InDegree {
-		if d == 0 {
+		if d == 0 && !compensations[id] {
 			ids = append(ids, id)
 		}
 	}
