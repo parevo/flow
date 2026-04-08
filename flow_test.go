@@ -361,13 +361,16 @@ func TestEngineGetExecutionSteps(t *testing.T) {
 func TestEngineCancelExecution(t *testing.T) {
 	storage := flow.NewMemoryStorage()
 	registry := flow.NewRegistry()
+	registry.RegisterFunction("test", func(ctx context.Context, input map[string]interface{}) (map[string]interface{}, error) {
+		return map[string]interface{}{"done": true}, nil
+	})
 	engine := flow.NewEngine(storage, registry)
 
 	wf := &flow.Workflow{
 		ID:      "cancel-test",
 		Name:    "Cancel Test",
 		Version: 1,
-		Nodes:   []flow.Node{{ID: "task", Type: "function"}},
+		Nodes:   []flow.Node{{ID: "task", Type: "function", Config: map[string]interface{}{"function": "test"}}},
 	}
 
 	ctx := context.Background()
@@ -391,13 +394,16 @@ func TestEngineCancelExecution(t *testing.T) {
 func TestEngineFailExecution(t *testing.T) {
 	storage := flow.NewMemoryStorage()
 	registry := flow.NewRegistry()
+	registry.RegisterFunction("test", func(ctx context.Context, input map[string]interface{}) (map[string]interface{}, error) {
+		return map[string]interface{}{"done": true}, nil
+	})
 	engine := flow.NewEngine(storage, registry)
 
 	wf := &flow.Workflow{
 		ID:      "fail-test",
 		Name:    "Fail Test",
 		Version: 1,
-		Nodes:   []flow.Node{{ID: "task", Type: "function"}},
+		Nodes:   []flow.Node{{ID: "task", Type: "function", Config: map[string]interface{}{"function": "test"}}},
 	}
 
 	ctx := context.Background()
