@@ -150,6 +150,23 @@ type NodeExecutor = engine.NodeExecutor
 
 // NewEngine creates a new workflow engine
 func NewEngine(storage Storage, registry *Registry) *Engine {
+	// Auto-register all built-in node types
+	funcNode := node.NewFunctionNode()
+	funcNode.SetRegistry(registry.Registry)
+
+	registry.Register("function", funcNode)
+	registry.Register("http", &node.HTTPNode{})
+	registry.Register("condition", &node.ConditionNode{})
+	registry.Register("log", &node.LogNode{})
+	registry.Register("transform", &node.TransformNode{})
+	registry.Register("signal", &node.SignalNode{})
+	registry.Register("subworkflow", &node.SubWorkflowNode{})
+	registry.Register("ai", &node.AINode{})
+	registry.Register("notify", &node.NotifyNode{})
+	registry.Register("switch", &node.SwitchNode{})
+	registry.Register("wait", &node.WaitNode{})
+	registry.Register("setvariable", &node.SetVariableNode{})
+
 	return &Engine{engine.NewEngine(storage, registry.Registry)}
 }
 
@@ -225,7 +242,9 @@ func (e *Engine) StartWorker(ctx context.Context, namespace, workerID string) {
 
 // NewRegistry creates a new function registry
 func NewRegistry() *Registry {
-	return &Registry{engine.NewRegistry()}
+	return &Registry{
+		Registry: engine.NewRegistry(),
+	}
 }
 
 // RegisterFunction registers a function handler
@@ -238,7 +257,11 @@ func NewRegistry() *Registry {
 //	    return map[string]interface{}{"sent": true}, nil
 //	})
 func (r *Registry) RegisterFunction(name string, handler HandlerFunc) {
-	r.Registry.RegisterFunction(name, handler)
+	// Wrap user handler to match internal signature
+	wrappedHandler := func(ctx context.Context, input map[string]interface{}) (map[string]interface{}, error) {
+		return handler(ctx, input)
+	}
+	r.Registry.RegisterFunction(name, wrappedHandler)
 }
 
 // Register registers a custom node executor
@@ -597,18 +620,9 @@ func MetricsRegistry() *prometheus.Registry {
 // BUILT-IN NODE TYPES
 // ========================================
 
-// Built-in node executors (auto-registered)
-var (
-	FunctionNode    = &node.FunctionNode{}
-	HTTPNode        = &node.HTTPNode{}
-	ConditionNode   = &node.ConditionNode{}
-	TransformNode   = &node.TransformNode{}
-	LogNode         = &node.LogNode{}
-	SignalNode      = &node.SignalNode{}
-	SubWorkflowNode = &node.SubWorkflowNode{}
-	AINode          = &node.AINode{}
-	NotifyNode      = &node.NotifyNode{}
-	SwitchNode      = &node.SwitchNode{}
-	WaitNode        = &node.WaitNode{}
-	SetVariableNode = &node.SetVariableNode{}
-)
+// Built-in node types are automatically registered when creating an Engine
+// No need to manually register them - just use the node type constants:
+//   - flow.NodeTypeFunction
+//   - flow.NodeTypeHTTP
+//   - flow.NodeTypeCondition
+//   etc.

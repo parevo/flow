@@ -2,77 +2,69 @@ package node
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
-	"sync"
 )
 
-// HandlerFunc is a function type for custom business logic
-// This allows users to register inline functions without creating separate node structs
-type HandlerFunc func(ctx context.Context, config map[string]interface{}, input string) (string, error)
+// RegistryInterface is the minimal interface FunctionNode needs from Registry
+type RegistryInterface interface {
+	GetFunction(name string) (func(context.Context, map[string]interface{}) (map[string]interface{}, error), bool)
+	ListFunctions() []string
+}
 
-// FunctionNode allows registering custom business logic as functions
-// This is the most flexible pattern - no need to create a new node type for each business logic!
-//
-// Usage:
-//   funcNode := node.NewFunctionNode()
-//   funcNode.Register("createCalendar", myCalendarFunction)
-//   funcNode.Register("processInvoice", myInvoiceFunction)
-//   registry.Register("function", funcNode)
-//
-//   wf.AddNode("step1", "function").WithConfig("function", "createCalendar")
+// FunctionNode executes user-registered functions
 type FunctionNode struct {
-	handlers map[string]HandlerFunc
-	mu       sync.RWMutex
+	registry RegistryInterface
 }
 
 func NewFunctionNode() *FunctionNode {
-	return &FunctionNode{
-		handlers: make(map[string]HandlerFunc),
-	}
+	return &FunctionNode{}
 }
 
-// Register adds a named function handler
-func (fn *FunctionNode) Register(name string, handler HandlerFunc) {
-	fn.mu.Lock()
-	defer fn.mu.Unlock()
-	fn.handlers[name] = handler
+// SetRegistry sets the registry that contains the functions
+func (fn *FunctionNode) SetRegistry(registry RegistryInterface) {
+	fn.registry = registry
 }
 
-// Unregister removes a function handler
-func (fn *FunctionNode) Unregister(name string) {
-	fn.mu.Lock()
-	defer fn.mu.Unlock()
-	delete(fn.handlers, name)
-}
-
-// List returns all registered function names
-func (fn *FunctionNode) List() []string {
-	fn.mu.RLock()
-	defer fn.mu.RUnlock()
-	
-	names := make([]string, 0, len(fn.handlers))
-	for name := range fn.handlers {
-		names = append(names, name)
-	}
-	return names
-}
-
-// Execute runs the specified function
+// Execute runs the specified function from the registry
 func (fn *FunctionNode) Execute(ctx context.Context, config map[string]interface{}, input string) (string, error) {
 	funcName, ok := config["function"].(string)
 	if !ok {
 		return "", fmt.Errorf("function node: missing 'function' name in config")
 	}
-	
-	fn.mu.RLock()
-	handler, ok := fn.handlers[funcName]
-	fn.mu.RUnlock()
-	
-	if !ok {
-		return "", fmt.Errorf("function node: function '%s' not registered. Available: %v", funcName, fn.List())
+
+	if fn.registry == nil {
+		return "", fmt.Errorf("function node: registry not set")
 	}
-	
-	return handler(ctx, config, input)
+
+	handler, exists := fn.registry.GetFunction(funcName)
+	if !exists {
+		return "", fmt.Errorf("function node: function '%s' not registered. Available: %v", funcName, fn.registry.ListFunctions())
+	}
+
+	// Parse input JSON to map
+	var inputMap map[string]interface{}
+	if input != "" && input != "{}" {
+		if err := json.Unmarshal([]byte(input), &inputMap); err != nil {
+			return "", fmt.Errorf("failed to parse input JSON: %w", err)
+		}
+	} else {
+		inputMap = make(map[string]interface{})
+	}
+
+	// Call the handler
+	output, err := handler(ctx, inputMap)
+	if err != nil {
+		return "", err
+	}
+
+	// Convert output to JSON
+	outputJSON, err := json.Marshal(output)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal output: %w", err)
+	}
+
+	return string(outputJSON), nil
 }
 
 func (fn *FunctionNode) Validate(config map[string]interface{}) error {
@@ -80,14 +72,15 @@ func (fn *FunctionNode) Validate(config map[string]interface{}) error {
 	if !ok {
 		return fmt.Errorf("function node: missing 'function' name in config")
 	}
-	
-	fn.mu.RLock()
-	_, exists := fn.handlers[funcName]
-	fn.mu.RUnlock()
-	
-	if !exists {
-		return fmt.Errorf("function node: function '%s' not registered. Available: %v", funcName, fn.List())
+
+	if fn.registry == nil {
+		return fmt.Errorf("function node: registry not set")
 	}
-	
+
+	_, exists := fn.registry.GetFunction(funcName)
+	if !exists {
+		return fmt.Errorf("function node: function '%s' not registered. Available: %v", funcName, fn.registry.ListFunctions())
+	}
+
 	return nil
 }

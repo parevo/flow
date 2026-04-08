@@ -421,7 +421,7 @@ func (e *Engine) Execute(ctx context.Context, namespace, workflowID string, inpu
 
 // StartWorker starts a worker loop that processes tasks
 func (e *Engine) StartWorker(ctx context.Context, namespace, workerID string) {
-	worker := NewWorker(workerID, e, nil, 100*time.Millisecond)
+	worker := NewWorker(workerID, e, e.registry, 100*time.Millisecond)
 	worker.SetNamespace(namespace)
 	worker.Start(ctx)
 }
