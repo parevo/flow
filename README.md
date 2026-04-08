@@ -1,100 +1,119 @@
 # Parevo Flow 🌌🚀
+### The Ultimate High-Performance, Minimalist Workflow Engine for Go
 
-**A Lightweight, High-Performance, and Intelligent Workflow Engine in Go.**
+[![Go Version](https://img.shields.io/badge/Go-1.25+-00ADD8?style=for-the-badge&logo=go)](https://golang.org)
+[![License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)](LICENSE)
+[![Performance](https://img.shields.io/badge/Performance-Ultra--Fast-orange?style=for-the-badge)](https://github.com/parevo/flow)
+[![Architecture](https://img.shields.io/badge/Architecture-DAG--Based-blue?style=for-the-badge)](https://github.com/parevo/flow)
 
-Parevo Flow is an enterprise-grade DAG orchestration engine designed for modern SaaS architectures. It combines **extreme flexibility, Temporal-level reliability, and intelligent decision-making** with zero external dependencies for core observability.
-
----
-
-## 🌟 Masterpiece Features
-
-- **🧠 Intelligent Routing**: Built-in `ConditionNode` support for complex If-Else branching and dynamic decision trees.
-- **🛡️ Enterprise Security**: Optional **AES-256-GCM** encryption for all sensitive PII data-at-rest.
-- **🧟‍♂️ Self-Healing (Zombie Recovery)**: Automatic recovery from worker crashes using a 5-minute heartbeat/visibility timeout.
-- **🛑 Execution Cancellation**: Instantly stop unwanted or malfunctioning workflows via the management API.
-- **🚀 Dynamic Retry Engine**: Granular control with custom `RetryPolicy` (MaxAttempts, Exponential Backoff, Intervals) per node.
-- **🧬 Child Workflows**: Support for modular, nested workflow execution using the `SubWorkflowNode`.
-- **🔄 Saga Pattern (Compensation)**: Built-in support for rollback logic with `CompensateNodeID` on failure.
-- **🏗️ Fluent Go Builder**: A type-safe, chainable DSL to build complex workflows directly in Go.
-- **📈 Native Observability**: **Zero-dependency Prometheus metrics** and **Structured JSON Logging (slog)**.
-- **⚡ High-Load Performance**: Optimized SQL with **Composite Indexes** and `SKIP LOCKED` concurrency.
-- **📊 Native Visualization**: Instantly generate **Mermaid.js** diagrams from your Go code for documentation.
+**Parevo Flow** is an enterprise-grade DAG (Directed Acyclic Graph) orchestration engine designed for Gophers who demand **Temporal-level reliability** but want **minimalist, zero-dependency performance**. It balances sub-millisecond execution speeds with bulletproof self-healing capabilities.
 
 ---
 
-## 📊 Workflow Visualization
+## 🏛️ Why Parevo Flow?
+While others are building heavy systems that require an army of infrastructure, Parevo Flow thrives on **Minimalist Power**. 🏢⚡
 
-Parevo Flow can visualize your complex logic as professional diagrams. Just build and call `.Visualise()`:
+- **🚀 Performance-First**: Native support for **Redis High-Speed Storage** and optimized SQL with `SKIP LOCKED` concurrency.
+- **🛡️ Self-Healing Core**: Automatic **Zombie Task Recovery** (Visibility Timeout) ensures no task is ever lost if a worker crashes.
+- **🧩 Advanced Logic**: Native support for **Child Workflows**, **Condition Branching**, and **Saga Patterns (Compensation)**.
+- **🚦 Event-Driven & Human-Ready**: Built-in **Signal Mechanism** for external approvals and mid-workflow inputs.
+- **📈 Professional Observability**: Zero-dependency **Prometheus metrics**, **Structured JSON Logging (slog)**, and **Internal Visualizer**.
+- **🔐 Enterprise Security**: Built-in **AES-256-GCM Encryption** for sensitive customer PII data-at-rest.
 
-```go
-wf := builder.NewWorkflow("signup", "User Signup")...
-fmt.Println(wf.Visualise())
-```
+---
 
-**Output (Mermaid.js):**
-```mermaid
-flowchart TD
-    validate[Validate User]
-    check-status{Is Valid?}
-    welcome-email[Send Welcome]
-    
-    validate --> check-status
-    check-status -- true --> welcome-email
-```
-> [!TIP]
-> You can paste the output into GitHub, Notion, or [Mermaid Live Editor](https://mermaid.live) to see your workflow graph!
+## 🛠️ Masterpiece Features
 
-## 🏗️ Fluent Builder Example
-
-Define complex, modular business logic with zero friction:
+### 1. 🏗️ Fluent Builder (DSL)
+Build complex business logic with a type-safe, chainable Go interface. No YAML, no friction.
 
 ```go
-wf := builder.NewWorkflow("signup-flow", "User Signup")
-    .AddNode("validate", "http").WithConfig("url", "https://api.check.com")
-    .Then("check-status")
-    .AddNode("check-status", "condition").WithConfig("variable", "valid", "operator", "==", "value", true)
-    .If("welcome-email", "true")
-    .If("flag-user", "false")
+wf := builder.NewWorkflow("user-onboarding", "SaaS Onboarding")
+    .AddNode("validate", "validator").WithConfig("api_key", "secret")
+    .Then("decide-plan")
+    .AddNode("decide-plan", "condition").WithConfig("variable", "plan", "operator", "==", "value", "premium")
+    .If("activate-pro", "true")
+    .If("activate-free", "false")
     .Build()
 ```
 
----
+### 2. 📊 Native Visualization
+Instantly turn your Go code into professional diagrams for documentation.
 
-## 🚀 Dynamic Retries & Saga Pattern
-
-Parevo Flow provides hierarchical control over failures:
-- **Automatic Retries**: Fine-tune backoff strategies for flaky external systems.
-- **Saga Compensation**: Automate rollbacks. If a node fails definitively, the engine triggers its designated compensation path.
-
----
-
-## 🛡️ Enterprise Security
-
-Securing customer data is a single command away:
 ```go
-crypto, _ := storage.NewCrypto("64-char-hex-encryption-key...")
-sqlStore.SetEncryption(crypto) // All Input/Output data is now AES-256 secured!
+// Output a Mermaid.js string for GitHub, Notion, or Mermaid-Live
+fmt.Println(wf.Visualise())
+```
+
+**Auto-generated Diagram Example:**
+```mermaid
+flowchart TD
+    validate[Validate User]
+    decide-plan{Plan Type?}
+    activate-pro[/Activate Premium/]
+    activate-free[/Activate Free/]
+    
+    validate --> decide-plan
+    decide-plan -- true --> activate-pro
+    decide-plan -- false --> activate-free
+```
+
+### 3. 🛡️ Saga Pattern (Self-Correction)
+Automate rollbacks. If a task fails definitively, the engine triggers the designated compensation node.
+
+```go
+.AddNode("payment", "stripe").WithSaga("refund-payment")
+```
+
+### 4. ⏰ Cron-Style Periodic Automation
+Scale your background tasks with sub-second precision using the integrated **CronManager**.
+
+```go
+cronMgr.AddSchedule("default", "daily-report", "0 9 * * *", `{"type":"full"}`)
+```
+
+### 5. ⚡ Ultra-High Throughput (Redis)
+Switch from SQL to Redis in production for sub-millisecond state transitions and massive concurrency.
+
+```go
+storage := redis.NewRedisStorage("localhost:6379", "", 0)
+engine := engine.NewEngine(storage, registry)
+```
+
+### 6. 🚦 Human-in-the-Loop (Signals)
+Pause execution and wait for a "Signal" (e.g., Email Approval, Slack Click) to resume.
+
+```go
+// Pause at 'manager-approval' node
+/api/v1/executions/{id}/signal/manager-approval --> Post '{"status": "approved"}'
 ```
 
 ---
 
-## 📁 Directory Structure
+## 📁 Directory Architecture
+A clean, modular structure following Go best practices:
 
-```text
-.
-├── internal/
-│   ├── builder/      # Fluent Go DSL Builders
-│   ├── engine/       # Core Brain & DAG Orchestration
-│   ├── storage/      # The Vault (SQL Drivers & AES-Crypto)
-│   ├── node/         # Logic Nodes (Wait, Condition, HTTP, SubWorkflow, etc.)
-│   └── trigger/      # Interface (API, Webhooks & Metrics)
-├── tests/            # Professional Quality Gate
-└── README.md         # This masterpiece
-```
+- 🧠 **`internal/engine/`**: The brain. Orchestration, Worker cycles, and Telemetry.
+- 🏗️ **`internal/builder/`**: Fluent DSL and Mermaid.js Visualizer.
+- 🗄️ **`internal/storage/`**: The Vault. SQL Dialects, Redis, and AES-256 Crypto.
+- 🧩 **`internal/node/`**: Logic Units (Condition, Wait, HTTP, SubWorkflow, Signal).
+- 🛰️ **`internal/trigger/`**: Interfaces. API, Webhooks, Metrics, and Cron.
 
 ---
 
-## 🚀 Quick Start
+## 🥇 Comparison vs. Temporal
+
+| Feature | Temporal | Parevo Flow |
+| :--- | :--- | :--- |
+| **Footprint** | Heavy (Needs DB, K8s, Services) | **Ultra-Light (Single Binary / Library)** |
+| **Observability** | External Dashboard | **Built-in Slog + Mermaid + Metrics** |
+| **Logic Core** | Event Sourcing / Replay | **DB/Redis State Persistence** |
+| **Simplicity** | High Learning Curve | **Go-Native & Minimalist** |
+| **Self-Healing** | Standard | **Advanced Zombie Recovery** |
+
+---
+
+## 🚀 Getting Started
 ```bash
 go get github.com/parevo/flow
 ```
@@ -102,7 +121,8 @@ go get github.com/parevo/flow
 ---
 
 ## 📄 License
-Distributed under the **MIT License**.
+Proudly distributed under the **MIT License**.
 
 ---
-**Parevo Flow** - *Built with ❤️ for the Gopher community by Ahmet Can Bilgay.*
+**Parevo Flow** - *The high-performance automation hearth for modern Gophers.*  
+*Built with ❤️ by Ahmet Can Bilgay.*
