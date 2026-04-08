@@ -34,7 +34,7 @@ func TestIntelligenceAndSecurity(t *testing.T) {
 	memStore := memory.NewMemoryStorage()
 	reg := engine.NewRegistry()
 	reg.Register("pass", &PassThroughNode{})
-	reg.Register("log", &engine.LogNode{})
+	reg.Register("log", node.NewLogNode())
 	reg.Register("condition", &node.ConditionNode{})
 	
 	eng := engine.NewEngine(memStore, reg)

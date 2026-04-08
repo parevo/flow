@@ -32,18 +32,5 @@ func (r *Registry) Get(nodeType string) (NodeExecutor, error) {
 	return ex, nil
 }
 
-// Example: LogNode
-type LogNode struct{}
-
-func (l *LogNode) Execute(ctx context.Context, config map[string]interface{}, input string) (string, error) {
-	msg, _ := config["message"].(string)
-	fmt.Printf("[LOG] %s (Input: %s)\n", msg, input)
-	return fmt.Sprintf("Logged: %s", msg), nil
-}
-
-func (l *LogNode) Validate(config map[string]interface{}) error {
-	if _, ok := config["message"].(string); !ok {
-		return fmt.Errorf("missing or invalid 'message' in config")
-	}
-	return nil
-}
+// Register built-in node types via node.NewLogNode(), node.NewNotifyNode(), etc.
+// See internal/node/ for all available executors.

@@ -4,9 +4,19 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 )
 
-// ConditionNode evaluates a simple condition and returns a branch
+// ConditionNode evaluates a condition and returns a branch ("true" or "false").
+//
+// Config:
+//   - "variable"  (string) : key to read from the input JSON
+//   - "operator"  (string) : ==, !=, >, <, >=, <=, contains, not_contains
+//   - "value"     (any)    : value to compare against
+//
+// Output: {"branch": "true"} or {"branch": "false"}
+// Original input fields are preserved alongside "branch" so downstream nodes
+// can still read them without needing a transform step.
 type ConditionNode struct{}
 
 func (n *ConditionNode) Execute(ctx context.Context, config map[string]interface{}, input string) (string, error) {
@@ -21,15 +31,42 @@ func (n *ConditionNode) Execute(ctx context.Context, config map[string]interface
 
 	inputValue, exists := inMap[variable]
 	if !exists {
-		return `{"branch": "false", "error": "variable not found"}`, nil
+		return buildCondOutput(inMap, "false"), nil
 	}
+
+	aStr := fmt.Sprintf("%v", inputValue)
+	bStr := fmt.Sprintf("%v", value)
 
 	result := false
 	switch operator {
 	case "==", "equal":
-		result = fmt.Sprintf("%v", inputValue) == fmt.Sprintf("%v", value)
+		result = aStr == bStr
 	case "!=", "not_equal":
-		result = fmt.Sprintf("%v", inputValue) != fmt.Sprintf("%v", value)
+		result = aStr != bStr
+	case ">":
+		var a, b float64
+		fmt.Sscanf(aStr, "%f", &a)
+		fmt.Sscanf(bStr, "%f", &b)
+		result = a > b
+	case "<":
+		var a, b float64
+		fmt.Sscanf(aStr, "%f", &a)
+		fmt.Sscanf(bStr, "%f", &b)
+		result = a < b
+	case ">=":
+		var a, b float64
+		fmt.Sscanf(aStr, "%f", &a)
+		fmt.Sscanf(bStr, "%f", &b)
+		result = a >= b
+	case "<=":
+		var a, b float64
+		fmt.Sscanf(aStr, "%f", &a)
+		fmt.Sscanf(bStr, "%f", &b)
+		result = a <= b
+	case "contains":
+		result = strings.Contains(aStr, bStr)
+	case "not_contains":
+		result = !strings.Contains(aStr, bStr)
 	default:
 		return "", fmt.Errorf("unsupported operator: %s", operator)
 	}
@@ -38,8 +75,23 @@ func (n *ConditionNode) Execute(ctx context.Context, config map[string]interface
 	if result {
 		branch = "true"
 	}
+	return buildCondOutput(inMap, branch), nil
+}
 
-	return fmt.Sprintf(`{"branch": "%s"}`, branch), nil
+// buildCondOutput merges the branch tag back into the input data so
+// downstream nodes still have access to original fields.
+func buildCondOutput(inMap map[string]interface{}, branch string) string {
+	out := make(map[string]interface{})
+	for k, v := range inMap {
+		out[k] = v
+	}
+	out["branch"] = branch
+	b, _ := json.Marshal(out)
+	return string(b)
+}
+
+func containsStr(a, b string) bool {
+	return strings.Contains(a, b)
 }
 
 func (n *ConditionNode) Validate(config map[string]interface{}) error {

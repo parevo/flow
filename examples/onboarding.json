@@ -1,44 +1,334 @@
 {
-  "id": "onboarding-wf",
-  "name": "User Onboarding Flow",
+  "id": "employee-onboarding-v1",
+  "name": "Employee Onboarding Journey",
   "version": 1,
   "status": "ACTIVE",
+  "description": "Comprehensive employee onboarding workflow testing all node types: DB operations, HTTP calls, signals, conditions, and progress tracking",
   "nodes": [
     {
-      "id": "node-welcome",
-      "type": "log",
-      "name": "Welcome Log",
+      "id": "node-fetch-user",
+      "type": "db_query",
+      "name": "Fetch User Data",
       "config": {
-        "message": "Welcome to the SaaS platform!"
+        "query": "SELECT * FROM users WHERE id=?",
+        "bind_field": "user_id",
+        "result_key": "user",
+        "mode": "one"
       }
     },
     {
-      "id": "node-wait-3s",
+      "id": "node-welcome-log",
+      "type": "log",
+      "name": "Welcome Message",
+      "config": {
+        "message": "🎉 Welcome! Starting onboarding process for new employee"
+      }
+    },
+    {
+      "id": "node-audit-start",
+      "type": "db_write",
+      "name": "Log Onboarding Start",
+      "config": {
+        "query": "INSERT INTO audit_log (user_id, action, detail, created_at) VALUES (?,?,?,datetime('now'))",
+        "bind_fields": ["user_id", "action", "detail"]
+      }
+    },
+    {
+      "id": "node-progress-start",
+      "type": "progress",
+      "name": "Onboarding Started",
+      "config": {
+        "step_name": "✅ Onboarding Process Initiated",
+        "progress": "10%"
+      }
+    },
+    {
+      "id": "node-wait-preparation",
       "type": "wait",
-      "name": "Wait for Nudge",
+      "name": "System Preparation",
       "config": {
         "duration": "3s"
       }
     },
     {
-      "id": "node-nudge-email",
-      "type": "log",
-      "name": "Send Nudge Email",
+      "id": "node-signal-documents",
+      "type": "signal",
+      "name": "Wait for Document Upload",
       "config": {
-        "message": "Checking if you need help with onboarding..."
+        "timeout": "14 days",
+        "signal_name": "documents_uploaded"
+      }
+    },
+    {
+      "id": "node-progress-docs",
+      "type": "progress",
+      "name": "Documents Received",
+      "config": {
+        "step_name": "📄 Required Documents Uploaded",
+        "progress": "30%"
+      }
+    },
+    {
+      "id": "node-http-verify",
+      "type": "http",
+      "name": "External Verification API",
+      "config": {
+        "url": "https://jsonplaceholder.typicode.com/users/1",
+        "method": "GET",
+        "headers": {
+          "Content-Type": "application/json"
+        }
+      }
+    },
+    {
+      "id": "node-verify-log",
+      "type": "log",
+      "name": "Verification Complete",
+      "config": {
+        "message": "📡 External API verification completed successfully"
+      }
+    },
+    {
+      "id": "node-signal-admin",
+      "type": "signal",
+      "name": "Admin Approval Required",
+      "config": {
+        "timeout": "48h",
+        "signal_name": "admin_approval"
+      }
+    },
+    {
+      "id": "node-progress-approval",
+      "type": "progress",
+      "name": "Pending Admin Review",
+      "config": {
+        "step_name": "⏳ Awaiting Manager Approval",
+        "progress": "50%"
+      }
+    },
+    {
+      "id": "node-condition-verified",
+      "type": "condition",
+      "name": "Check Verification Status",
+      "config": {
+        "variable": "status",
+        "operator": "==",
+        "value": "verified"
+      }
+    },
+    {
+      "id": "node-success-log",
+      "type": "log",
+      "name": "Verification Successful",
+      "config": {
+        "message": "✅ Employee verification passed! Proceeding with training"
+      }
+    },
+    {
+      "id": "node-update-verified",
+      "type": "db_write",
+      "name": "Update User Status",
+      "config": {
+        "query": "UPDATE users SET status='verified' WHERE id=?",
+        "bind_fields": ["user_id"]
+      }
+    },
+    {
+      "id": "node-progress-training",
+      "type": "progress",
+      "name": "Training Initiated",
+      "config": {
+        "step_name": "🎓 Safety Training Started",
+        "progress": "70%"
+      }
+    },
+    {
+      "id": "node-signal-training",
+      "type": "signal",
+      "name": "Wait for Training Completion",
+      "config": {
+        "timeout": "72h",
+        "signal_name": "training_completed"
+      }
+    },
+    {
+      "id": "node-badge-query",
+      "type": "db_query",
+      "name": "Check Available Badges",
+      "config": {
+        "query": "SELECT * FROM badges WHERE user_id=? AND status='active'",
+        "bind_field": "user_id",
+        "result_key": "badges",
+        "mode": "many"
+      }
+    },
+    {
+      "id": "node-progress-complete",
+      "type": "progress",
+      "name": "Onboarding Complete",
+      "config": {
+        "step_name": "🏅 ONBOARDING SUCCESSFULLY COMPLETED!",
+        "progress": "100%"
+      }
+    },
+    {
+      "id": "node-fail-log",
+      "type": "log",
+      "name": "Verification Failed",
+      "config": {
+        "message": "❌ Employee verification failed - Initiating suspension process"
+      }
+    },
+    {
+      "id": "node-update-suspended",
+      "type": "db_write",
+      "name": "Suspend Account",
+      "config": {
+        "query": "UPDATE users SET status='suspended' WHERE id=?",
+        "bind_fields": ["user_id"]
+      }
+    },
+    {
+      "id": "node-audit-suspended",
+      "type": "db_write",
+      "name": "Log Suspension",
+      "config": {
+        "query": "INSERT INTO audit_log (user_id, action, detail, created_at) VALUES (?,?,?,datetime('now'))",
+        "bind_fields": ["user_id", "action", "detail"]
+      }
+    },
+    {
+      "id": "node-progress-suspended",
+      "type": "progress",
+      "name": "Account Suspended",
+      "config": {
+        "step_name": "⛔ Account Suspended - Verification Failed",
+        "progress": "0%"
       }
     }
   ],
   "edges": [
     {
       "id": "e1",
-      "sourceId": "node-welcome",
-      "targetId": "node-wait-3s"
+      "sourceId": "node-fetch-user",
+      "targetId": "node-welcome-log"
     },
     {
       "id": "e2",
-      "sourceId": "node-wait-3s",
-      "targetId": "node-nudge-email"
+      "sourceId": "node-welcome-log",
+      "targetId": "node-audit-start"
+    },
+    {
+      "id": "e3",
+      "sourceId": "node-audit-start",
+      "targetId": "node-progress-start"
+    },
+    {
+      "id": "e4",
+      "sourceId": "node-progress-start",
+      "targetId": "node-wait-preparation"
+    },
+    {
+      "id": "e5",
+      "sourceId": "node-wait-preparation",
+      "targetId": "node-signal-documents"
+    },
+    {
+      "id": "e6",
+      "sourceId": "node-signal-documents",
+      "targetId": "node-progress-docs"
+    },
+    {
+      "id": "e7",
+      "sourceId": "node-progress-docs",
+      "targetId": "node-http-verify"
+    },
+    {
+      "id": "e8",
+      "sourceId": "node-http-verify",
+      "targetId": "node-verify-log"
+    },
+    {
+      "id": "e9",
+      "sourceId": "node-verify-log",
+      "targetId": "node-signal-admin"
+    },
+    {
+      "id": "e10",
+      "sourceId": "node-signal-admin",
+      "targetId": "node-progress-approval"
+    },
+    {
+      "id": "e11",
+      "sourceId": "node-progress-approval",
+      "targetId": "node-condition-verified"
+    },
+    {
+      "id": "e12-true",
+      "sourceId": "node-condition-verified",
+      "targetId": "node-success-log",
+      "condition": "true"
+    },
+    {
+      "id": "e13",
+      "sourceId": "node-success-log",
+      "targetId": "node-update-verified"
+    },
+    {
+      "id": "e14",
+      "sourceId": "node-update-verified",
+      "targetId": "node-progress-training"
+    },
+    {
+      "id": "e15",
+      "sourceId": "node-progress-training",
+      "targetId": "node-signal-training"
+    },
+    {
+      "id": "e16",
+      "sourceId": "node-signal-training",
+      "targetId": "node-badge-query"
+    },
+    {
+      "id": "e17",
+      "sourceId": "node-badge-query",
+      "targetId": "node-progress-complete"
+    },
+    {
+      "id": "e18-false",
+      "sourceId": "node-condition-verified",
+      "targetId": "node-fail-log",
+      "condition": "false"
+    },
+    {
+      "id": "e19",
+      "sourceId": "node-fail-log",
+      "targetId": "node-update-suspended"
+    },
+    {
+      "id": "e20",
+      "sourceId": "node-update-suspended",
+      "targetId": "node-audit-suspended"
+    },
+    {
+      "id": "e21",
+      "sourceId": "node-audit-suspended",
+      "targetId": "node-progress-suspended"
     }
-  ]
+  ],
+  "metadata": {
+    "created_at": "2024-01-15",
+    "author": "Parevo Flow Team",
+    "tags": ["onboarding", "employee", "comprehensive", "demo"],
+    "test_parameters": {
+      "user_id": 2,
+      "action": "onboarding_started",
+      "detail": "New employee onboarding workflow initiated"
+    },
+    "signal_instructions": {
+      "documents_uploaded": "Trigger when employee uploads required documents",
+      "admin_approval": "Trigger with {\"status\": \"verified\"} for success or {\"status\": \"rejected\"} for failure",
+      "training_completed": "Trigger when employee completes safety training"
+    }
+  }
 }

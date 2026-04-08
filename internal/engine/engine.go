@@ -122,7 +122,7 @@ func (e *Engine) CompleteStep(ctx context.Context, step *models.ExecutionStep, o
 
 	// Find next nodes with branch-aware routing
 	nextNodes := g.GetNextNodesWithBranch(step.NodeID, output)
-	
+
 	// Mark non-matching branch targets as SKIPPED
 	allEdges := g.Edges[step.NodeID]
 	for _, edge := range allEdges {
@@ -230,8 +230,41 @@ func (e *Engine) SignalExecution(ctx context.Context, namespace string, execID s
 		return fmt.Errorf("no WAITING step found for node %s in execution %s", nodeID, execID)
 	}
 
+	// Merge signal data with existing input so downstream nodes (like condition) can access it
+	mergedOutput := e.mergeSignalData(targetStep.Input, output)
+
 	e.logger.Info("Signaling execution resume", "execution", execID, "node", nodeID)
-	return e.CompleteStep(ctx, targetStep, output)
+	return e.CompleteStep(ctx, targetStep, mergedOutput)
+}
+
+// mergeSignalData combines existing input with signal data for downstream nodes
+func (e *Engine) mergeSignalData(existingInput string, signalData string) string {
+	// Parse existing input
+	var inputMap map[string]interface{}
+	if existingInput != "" {
+		_ = json.Unmarshal([]byte(existingInput), &inputMap)
+	}
+	if inputMap == nil {
+		inputMap = make(map[string]interface{})
+	}
+
+	// Parse signal data
+	var signalMap map[string]interface{}
+	if signalData != "" {
+		_ = json.Unmarshal([]byte(signalData), &signalMap)
+	}
+	if signalMap == nil {
+		signalMap = make(map[string]interface{})
+	}
+
+	// Merge: signal data overwrites existing keys
+	for k, v := range signalMap {
+		inputMap[k] = v
+	}
+
+	// Return merged JSON
+	merged, _ := json.Marshal(inputMap)
+	return string(merged)
 }
 
 func (e *Engine) skipNode(ctx context.Context, exec *models.Execution, g *Graph, nodeID string) {
@@ -262,7 +295,7 @@ func (e *Engine) skipNode(ctx context.Context, exec *models.Execution, g *Graph,
 	// If it has at least one COMPLETED predecessor, it might be ready to RUN instead.
 	for _, edge := range g.Edges[nodeID] {
 		childID := edge.TargetID
-		
+
 		ready, _ := e.isNodeReady(ctx, childID, exec.Namespace, exec.ID, g)
 		if ready {
 			// Check if all predecessors are skipped
@@ -277,7 +310,7 @@ func (e *Engine) skipNode(ctx context.Context, exec *models.Execution, g *Graph,
 					}
 				}
 			}
-			
+
 			for _, p := range preds {
 				found := false
 				for _, cs := range childSteps {

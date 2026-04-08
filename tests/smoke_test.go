@@ -7,6 +7,7 @@ import (
 
 	"github.com/parevo/flow/internal/engine"
 	"github.com/parevo/flow/internal/models"
+	"github.com/parevo/flow/internal/node"
 	"github.com/parevo/flow/internal/storage/memory"
 )
 
@@ -17,7 +18,7 @@ func TestFullWorkflowExecution(t *testing.T) {
 	// 1. Setup
 	storage := memory.NewMemoryStorage()
 	registry := engine.NewRegistry()
-	registry.Register("log", &engine.LogNode{})
+	registry.Register("log", node.NewLogNode())
 
 	eng := engine.NewEngine(storage, registry)
 	worker := engine.NewWorker("worker-1", eng, registry, 100*time.Millisecond)

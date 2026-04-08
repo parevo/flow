@@ -17,8 +17,8 @@
             --dfBackgroundSize: 20px;
             --dfBackgroundImage: linear-gradient(to right, #1e293b 1px, transparent 1px), linear-gradient(to bottom, #1e293b 1px, transparent 1px);
         }
-        body { 
-            margin: 0; font-family: 'Inter', system-ui, sans-serif; 
+        body {
+            margin: 0; font-family: 'Inter', system-ui, sans-serif;
             background: var(--bg-dark); color: #fff; display: flex;
             height: 100vh; overflow: hidden;
         }
@@ -29,17 +29,17 @@
             align-items: center; justify-content: space-between; padding: 0 20px; z-index: 10;
         }
         .header h1 { font-size: 18px; margin: 0; background: linear-gradient(90deg, #60a5fa, #c084fc); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;}
-        
+
         .header-buttons { display: flex; gap: 10px; }
         .btn { padding: 8px 16px; border-radius: 6px; font-weight: bold; cursor: pointer; transition: all 0.2s; border: none; color: white;}
         .btn-load { background: #334155; border: 1px solid #475569; }
         .btn-load:hover { background: #475569; }
         .btn-run {
-            background: linear-gradient(90deg, #3b82f6, #8b5cf6); 
+            background: linear-gradient(90deg, #3b82f6, #8b5cf6);
             box-shadow: 0 4px 15px rgba(59, 130, 246, 0.4);
         }
         .btn-run:hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(59, 130, 246, 0.6); }
-        
+
         .wrapper { display: flex; width: 100%; margin-top: 60px;}
         .sidebar {
             width: 250px; background: var(--surface); border-right: 1px solid var(--border);
@@ -55,7 +55,7 @@
             transition: border-color 0.2s; font-size: 13px;
         }
         .drag-item:hover { border-color: var(--brand); }
-        
+
         #drawflow { width: calc(100vw - 250px); height: calc(100vh - 60px); position: relative; }
 
         /* Customizing Drawflow default UI */
@@ -67,7 +67,7 @@
         .drawflow .connection .main-path { stroke: #60a5fa; stroke-width: 3px; }
         .drawflow-node .inputs .input { left: -15px; background: var(--brand); border: 2px solid var(--surface); }
         .drawflow-node .outputs .output { right: -15px; background: var(--brand); border: 2px solid var(--surface); }
-        
+
         /* Multiple Outputs */
         .drawflow-node.condition .outputs .output_1 { right: -15px; background: #22c55e; } /* true */
         .drawflow-node.condition .outputs .output_2 { right: -15px; background: #ef4444; } /* false */
@@ -76,7 +76,7 @@
         .node-title { font-weight: bold; font-size: 14px; margin-bottom: 5px; display:flex; align-items: center; justify-content: space-between;}
         .node-id-label { font-size: 10px; color: #94a3b8; background: #0f172a; padding: 2px 5px; border-radius: 4px; }
         .node-box input, .node-box select {
-            width: 100%; background: #0f172a; border: 1px solid #334155; 
+            width: 100%; background: #0f172a; border: 1px solid #334155;
             color: #fff; padding: 6px; border-radius: 4px; box-sizing:border-box; font-size: 12px;
         }
 
@@ -123,14 +123,30 @@
             word-break: break-all;
             line-height: 1.4;
         }
+
+        /* Help Panel */
+        .help-panel {
+            position: absolute; top: 80px; right: 30px; background: var(--surface);
+            border: 1px solid var(--brand); border-radius: 10px; padding: 20px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.5); width: 400px; z-index: 100;
+            max-height: 80vh; overflow-y: auto;
+        }
+        .help-panel h3 { margin-top: 0; font-size: 16px; border-bottom: 1px solid var(--border); padding-bottom: 10px; margin-bottom: 15px; color: #60a5fa;}
+        .help-panel h4 { font-size: 13px; color: #a5b4fc; margin-top: 15px; margin-bottom: 8px;}
+        .help-panel p, .help-panel li { font-size: 12px; color: #cbd5e1; line-height: 1.6; margin: 5px 0;}
+        .help-panel ul { margin: 5px 0; padding-left: 20px;}
+        .help-panel code { background: #0f172a; padding: 2px 6px; border-radius: 3px; color: #fbbf24; font-size: 11px;}
+        .help-panel .close-btn { float: right; cursor: pointer; font-size: 20px; color: #94a3b8; font-weight: bold;}
+        .help-panel .close-btn:hover { color: #ef4444; }
     </style>
 </head>
 <body>
     <div class="header">
-        <h1>🌌 Parevo Flow Studio</h1>
+        <h1>🌌 Parevo Flow Studio - Employee Onboarding (Tests All Nodes)</h1>
         <div class="header-buttons">
-            <button id="btnLoadExample" class="btn btn-load">📚 Reset Flow</button>
+            <button id="btnLoadExample" class="btn btn-load">🔄 Employee Onboarding</button>
             <button id="btnRun" class="btn btn-run">▶ Deploy & Run</button>
+            <button id="btnHelp" class="btn btn-load">❓ Test Guide</button>
         </div>
     </div>
     <div class="wrapper">
@@ -154,6 +170,12 @@
             <div class="drag-item" draggable="true" ondragstart="drag(event)" data-node="condition">
                 🔀 Condition (Branch)
             </div>
+            <div class="drag-item" draggable="true" ondragstart="drag(event)" data-node="db_query">
+                🗄️ DB Query
+            </div>
+            <div class="drag-item" draggable="true" ondragstart="drag(event)" data-node="db_write">
+                ✏️ DB Write
+            </div>
         </div>
         <div id="drawflow" ondrop="drop(event)" ondragover="allowDrop(event)">
             <!-- Signal Control Panel -->
@@ -163,14 +185,105 @@
                 <select id="sigNodeId">
                     <option value="">Sinyal Bekleniyor...</option>
                 </select>
-                
+
+                <div id="signalHint" style="background:#1e3a8a; border-left:3px solid #3b82f6; padding:8px; margin:10px 0; font-size:11px; border-radius:4px; display:none;">
+                    <strong style="color:#60a5fa;">💡 İpucu:</strong>
+                    <span id="signalHintText" style="color:#cbd5e1;"></span>
+                </div>
+
                 <div style="font-size:11px; margin-bottom:5px; color:#94a3b8;">Aktarılacak Veriler (Örn Condition için):</div>
                 <div style="display:flex; gap:5px; margin-bottom:10px;">
                     <input type="text" id="sigKey" placeholder="Anahtar (status)">
                     <input type="text" id="sigValue" placeholder="Değer (verified)">
                 </div>
-                
+
                 <button id="btnSendSignal" class="btn btn-run">⚡ Trigger Signal</button>
+            </div>
+
+            <!-- Help/Testing Guide Panel -->
+            <div id="helpPanel" class="help-panel" style="display: none;">
+                <span class="close-btn" onclick="document.getElementById('helpPanel').style.display='none'">×</span>
+                <h3>🧪 Testing Guide - Employee Onboarding Workflow</h3>
+
+                <h4>📋 Workflow Overview</h4>
+                <p>Bu workflow <strong>tüm node tiplerini</strong> test eder:</p>
+                <ul>
+                    <li><code>db_query</code> - Kullanıcı bilgisi çeker</li>
+                    <li><code>db_write</code> - Audit log yazar & status günceller</li>
+                    <li><code>log</code> - Console mesajları</li>
+                    <li><code>wait</code> - 3 saniye bekler</li>
+                    <li><code>signal</code> - Manuel tetikleme bekler (3 adet)</li>
+                    <li><code>http</code> - Dış API çağrısı</li>
+                    <li><code>progress</code> - İlerleme gösterir</li>
+                    <li><code>condition</code> - Doğrulama dallanması</li>
+                </ul>
+
+                <h4>🚀 Nasıl Test Edilir?</h4>
+                <p><strong>1. Deploy & Run</strong> butonuna tıklayın</p>
+                <p>→ Workflow başlar, <code>user_id=2</code> (Zeynep Yılmaz) ile çalışır</p>
+
+                <p><strong>2. İlk Signal Node</strong> (Belge Yükleme - Boş Geçilir)</p>
+                <ul>
+                    <li>Sarı animasyonlu node görünür</li>
+                    <li>Control panel'den node'u seçin</li>
+                    <li><strong>Key/Value boş bırakın</strong> (sadece devam etmek için)</li>
+                    <li><code>⚡ Trigger Signal</code> tıklayın → İş akışı devam eder</li>
+                </ul>
+
+                <p><strong>3. HTTP API Çağrısı</strong></p>
+                <p>→ Otomatik jsonplaceholder'a GET request atar (beklemez)</p>
+
+                <p><strong>4. ⚠️ KRİTİK: Admin Onay Signal</strong></p>
+                <p style="background:#1e293b; padding:8px; border-left:3px solid #f59e0b; margin:8px 0;">
+                    <strong>ÖNEMLİ:</strong> Bu signal'dan sonra Condition node geliyor!
+                    Burada gönderdiğiniz <code>status</code> değeri Condition tarafından kontrol edilecek.
+                </p>
+                <ul>
+                    <li>Sarı node bekler, dropdown'dan seçin</li>
+                    <li><strong>Key:</strong> <code>status</code> yazın (tam olarak)</li>
+                    <li><strong>Value:</strong> <code>verified</code> (başarı için) VEYA başka bir değer (hata için)</li>
+                    <li>⚡ Trigger Signal → Bu veri sonraki Condition node'a geçer!</li>
+                </ul>
+
+                <h4>🔀 Condition Dallanması (Signal Sonrası)</h4>
+                <p><strong>Eğer Signal'da <code>status: verified</code> gönderirseniz:</strong></p>
+                <ul>
+                    <li>✅ Yeşil dal (TRUE) → Eğitim başlar</li>
+                    <li>DB'de user status <code>verified</code> olur</li>
+                    <li>3. Signal node (Eğitim tamamlama) gelir</li>
+                    <li>Final: <code>100%</code> progress</li>
+                </ul>
+
+                <p><strong>Eğer başka değer gönderirseniz (örn: <code>rejected</code> veya Key/Value boş):</strong></p>
+                <ul>
+                    <li>❌ Kırmızı dal (FALSE) → Hesap askıya alınır</li>
+                    <li>DB'de user status <code>suspended</code> olur</li>
+                    <li>Progress <code>0%</code> olur</li>
+                    <li><strong>Not:</strong> Condition sadece <code>status == "verified"</code> kontrol eder</li>
+                </ul>
+
+                <h4>🎨 Visual Feedback</h4>
+                <ul>
+                    <li><strong>Yeşil border:</strong> COMPLETED</li>
+                    <li><strong>Sarı animasyon:</strong> WAITING (Signal bekliyor)</li>
+                    <li><strong>Kırmızı border:</strong> FAILED</li>
+                </ul>
+
+                <h4>🗄️ Database Inspection</h4>
+                <p>Console'da SQL logları görürsünüz. İsterseniz:</p>
+                <p><code>http://localhost:8080/api/db?table=users</code></p>
+                <p><code>http://localhost:8080/api/db?table=audit_log</code></p>
+
+                <h4>💡 Pro Tips</h4>
+                <ul>
+                    <li><strong>Signal → Condition İlişkisi:</strong> Signal'da girdiğiniz Key/Value'lar sonraki node'lara taşınır!</li>
+                    <li>Farklı user_id test etmek için URL'yi değiştirin: <code>/api/run?user_id=1</code></li>
+                    <li>Console loglarını açın (F12) → SQL sorguları ve node çıktılarını görürsünüz</li>
+                    <li>Node'ları drag & drop ile ekleyebilirsiniz</li>
+                    <li>Her node'a tıklayarak config'ini görebilirsiniz</li>
+                    <li>Reset button ile baştan başlayabilirsiniz</li>
+                    <li><strong>Hata yaparsanız:</strong> Sayfayı yenileyin ve tekrar başlayın</li>
+                </ul>
             </div>
         </div>
     </div>
@@ -206,7 +319,7 @@
                         <input type="text" df-message placeholder="Message">
                     </div>`;
                 data = { "message": "My Message" };
-            } 
+            }
             else if (name === 'wait') {
                 html = `
                     <div class="node-box">
@@ -259,6 +372,29 @@
                     </div>`;
                 data = { "variable": "status", "operator": "==", "value": "verified" };
             }
+            else if (name === 'db_query') {
+                html = `
+                    <div class="node-box">
+                        ${headerHtml('🗄️ DB Query')}
+                        <input type="text" df-query placeholder="SELECT * FROM users WHERE id=?">
+                        <input type="text" df-bind_field placeholder="Bind Field (e.g. user_id)">
+                        <input type="text" df-result_key placeholder="Result Key (default: db_result)">
+                        <select df-mode>
+                            <option value="one">One Row</option>
+                            <option value="many">Many Rows</option>
+                        </select>
+                    </div>`;
+                data = { "query": "SELECT * FROM users WHERE id=?", "bind_field": "user_id", "result_key": "user", "mode": "one" };
+            }
+            else if (name === 'db_write') {
+                html = `
+                    <div class="node-box">
+                        ${headerHtml('✏️ DB Write')}
+                        <input type="text" df-query placeholder="INSERT INTO audit_log (user_id, action) VALUES (?,?)">
+                        <input type="text" df-bind_fields placeholder="Bind Fields (comma: user_id,action)">
+                    </div>`;
+                data = { "query": "INSERT INTO audit_log (user_id, action, created_at) VALUES (?,?,datetime('now'))", "bind_fields": "user_id,action" };
+            }
 
             return editor.addNode(name, inputs, outputs, pos_x, pos_y, name, data, html);
         }
@@ -270,70 +406,136 @@
             var node = ev.dataTransfer.getData("node");
             var pos_x = ev.clientX * ( editor.precanvas.clientWidth / (editor.precanvas.clientWidth * editor.zoom)) - (editor.precanvas.getBoundingClientRect().x * ( editor.precanvas.clientWidth / (editor.precanvas.clientWidth * editor.zoom)));
             var pos_y = ev.clientY * ( editor.precanvas.clientHeight / (editor.precanvas.clientHeight * editor.zoom)) - (editor.precanvas.getBoundingClientRect().y * ( editor.precanvas.clientHeight / (editor.precanvas.clientHeight * editor.zoom)));
-            
+
             addNodeToCanvas(node, pos_x, pos_y);
         }
 
         function loadAwesomeBadgeWorkflow() {
             editor.clearModuleSelected(); // clears the canvas completely
-            
-            // 1. Initial Document Request
-            let id1 = addNodeToCanvas('signal', 50, 300);
-            editor.updateNodeDataFromId(id1, { "timeout": "14 days" });
-            
-            // 2. Uploaded
-            let id2 = addNodeToCanvas('progress', 350, 300);
-            editor.updateNodeDataFromId(id2, { "step_name": "Kayıt Belgeleri Alındı", "progress": "30%" });
 
-            // 2.5 Admin Approval Wait! (This pauses the execution before condition)
-            let adminSig = addNodeToCanvas('signal', 650, 300);
-            editor.updateNodeDataFromId(adminSig, { "timeout": "48h" });
-            
-            // 3. Validation Check
-            let cond = addNodeToCanvas('condition', 950, 300);
-            editor.updateNodeDataFromId(cond, { "variable": "status", "operator": "==", "value": "verified" });
+            // ========== EMPLOYEE ONBOARDING JOURNEY ==========
+            // Tests ALL node types: db_query, db_write, log, wait, http, signal, progress, condition
 
-            // 4. Branch TRUE -> Training Phase
-            let idSuccess1 = addNodeToCanvas('progress', 1250, 150);
-            editor.updateNodeDataFromId(idSuccess1, { "step_name": "Sistem Onayı (Geçerli)", "progress": "50%" });
+            // ROW 1: Initial User Fetch & Welcome
+            let n1 = addNodeToCanvas('db_query', 50, 100);
+            editor.updateNodeDataFromId(n1, {
+                "query": "SELECT * FROM users WHERE id=?",
+                "bind_field": "user_id",
+                "result_key": "user",
+                "mode": "one"
+            });
 
-            let idSuccess2 = addNodeToCanvas('signal', 1550, 150);
-            editor.updateNodeDataFromId(idSuccess2, { "timeout": "72h" });
+            let n2 = addNodeToCanvas('log', 400, 100);
+            editor.updateNodeDataFromId(n2, { "message": "🎉 Hoş Geldin! Kullanıcı Kaydı Alındı" });
 
-            let idSuccess3 = addNodeToCanvas('progress', 1850, 150);
-            editor.updateNodeDataFromId(idSuccess3, { "step_name": "İSG Eğitimi Bitti", "progress": "80%" });
-            
-            // Final Certification
-            let idSuccess4 = addNodeToCanvas('progress', 2150, 150);
-            editor.updateNodeDataFromId(idSuccess4, { "step_name": "🏅 FIELD EXPERT", "progress": "100%" });
+            let n3 = addNodeToCanvas('db_write', 750, 100);
+            editor.updateNodeDataFromId(n3, {
+                "query": "INSERT INTO audit_log (user_id, action, created_at) VALUES (?,?,datetime('now'))",
+                "bind_fields": "user_id,action"
+            });
 
-            // 5. Branch FALSE -> Account Blocked / Error
-            let idFail1 = addNodeToCanvas('log', 1250, 450);
-            editor.updateNodeDataFromId(idFail1, { "message": "Belge Doğrulanamadı. İPTAL EDİLİYOR!" });
+            let n4 = addNodeToCanvas('progress', 1100, 100);
+            editor.updateNodeDataFromId(n4, { "step_name": "✅ Kullanıcı Kaydı Başlatıldı", "progress": "10%" });
 
-            let idFail2 = addNodeToCanvas('progress', 1550, 450);
-            editor.updateNodeDataFromId(idFail2, { "step_name": "ASKIYA ALINDI / İPTAL EDİLDİ", "progress": "0%" });
+            // ROW 2: Wait & Document Upload Signal
+            let n5 = addNodeToCanvas('wait', 1450, 100);
+            editor.updateNodeDataFromId(n5, { "duration": "3s" });
 
-            // Connections
-            editor.addConnection(id1, id2, "output_1", "input_1");
-            editor.addConnection(id2, adminSig, "output_1", "input_1");
-            editor.addConnection(adminSig, cond, "output_1", "input_1");
+            let n6 = addNodeToCanvas('signal', 1800, 100);
+            editor.updateNodeDataFromId(n6, { "timeout": "14 days" });
 
-            // Cond Outputs: output_1 is TRUE (Green), output_2 is FALSE (Red)
-            editor.addConnection(cond, idSuccess1, "output_1", "input_1");
-            editor.addConnection(idSuccess1, idSuccess2, "output_1", "input_1");
-            editor.addConnection(idSuccess2, idSuccess3, "output_1", "input_1");
-            editor.addConnection(idSuccess3, idSuccess4, "output_1", "input_1");
+            let n7 = addNodeToCanvas('progress', 2150, 100);
+            editor.updateNodeDataFromId(n7, { "step_name": "📄 Belgeler Yüklendi", "progress": "30%" });
 
-            // False connection logic
-            editor.addConnection(cond, idFail1, "output_2", "input_1");
-            editor.addConnection(idFail1, idFail2, "output_1", "input_1");
+            // ROW 3: HTTP API Check & Admin Approval Signal
+            let n8 = addNodeToCanvas('http', 50, 300);
+            editor.updateNodeDataFromId(n8, {
+                "url": "https://jsonplaceholder.typicode.com/users/1",
+                "method": "GET"
+            });
+
+            let n9 = addNodeToCanvas('log', 400, 300);
+            editor.updateNodeDataFromId(n9, { "message": "📡 Dış API Doğrulaması Yapıldı" });
+
+            let n10 = addNodeToCanvas('signal', 750, 300);
+            editor.updateNodeDataFromId(n10, { "timeout": "48h" });
+
+            let n11 = addNodeToCanvas('progress', 1100, 300);
+            editor.updateNodeDataFromId(n11, { "step_name": "⏳ Admin Onayı Bekleniyor", "progress": "50%" });
+
+            // ROW 4: Condition Branch
+            let n12 = addNodeToCanvas('condition', 1450, 300);
+            editor.updateNodeDataFromId(n12, {
+                "variable": "status",
+                "operator": "==",
+                "value": "verified"
+            });
+
+            // SUCCESS BRANCH (TRUE - Top)
+            let s1 = addNodeToCanvas('log', 1800, 150);
+            editor.updateNodeDataFromId(s1, { "message": "✅ Doğrulama Başarılı!" });
+
+            let s2 = addNodeToCanvas('db_write', 2150, 150);
+            editor.updateNodeDataFromId(s2, {
+                "query": "UPDATE users SET status='verified' WHERE id=?",
+                "bind_fields": "user_id"
+            });
+
+            let s3 = addNodeToCanvas('progress', 2500, 150);
+            editor.updateNodeDataFromId(s3, { "step_name": "🎓 Eğitim Başlatıldı", "progress": "70%" });
+
+            let s4 = addNodeToCanvas('signal', 2850, 150);
+            editor.updateNodeDataFromId(s4, { "timeout": "72h" });
+
+            let s5 = addNodeToCanvas('progress', 3200, 150);
+            editor.updateNodeDataFromId(s5, { "step_name": "🏅 ONBOARDING TAMAMLANDI!", "progress": "100%" });
+
+            // FAILURE BRANCH (FALSE - Bottom)
+            let f1 = addNodeToCanvas('log', 1800, 450);
+            editor.updateNodeDataFromId(f1, { "message": "❌ Doğrulama Başarısız - İptal Ediliyor" });
+
+            let f2 = addNodeToCanvas('db_write', 2150, 450);
+            editor.updateNodeDataFromId(f2, {
+                "query": "UPDATE users SET status='suspended' WHERE id=?",
+                "bind_fields": "user_id"
+            });
+
+            let f3 = addNodeToCanvas('progress', 2500, 450);
+            editor.updateNodeDataFromId(f3, { "step_name": "⛔ Hesap Askıya Alındı", "progress": "0%" });
+
+            // ========== CONNECTIONS ==========
+            // Row 1 (User Fetch Flow)
+            editor.addConnection(n1, n2, "output_1", "input_1");
+            editor.addConnection(n2, n3, "output_1", "input_1");
+            editor.addConnection(n3, n4, "output_1", "input_1");
+            editor.addConnection(n4, n5, "output_1", "input_1");
+            editor.addConnection(n5, n6, "output_1", "input_1");
+            editor.addConnection(n6, n7, "output_1", "input_1");
+
+            // Row 2-3 (Document to Admin Approval)
+            editor.addConnection(n7, n8, "output_1", "input_1");
+            editor.addConnection(n8, n9, "output_1", "input_1");
+            editor.addConnection(n9, n10, "output_1", "input_1");
+            editor.addConnection(n10, n11, "output_1", "input_1");
+            editor.addConnection(n11, n12, "output_1", "input_1");
+
+            // SUCCESS Branch (output_1 = TRUE)
+            editor.addConnection(n12, s1, "output_1", "input_1");
+            editor.addConnection(s1, s2, "output_1", "input_1");
+            editor.addConnection(s2, s3, "output_1", "input_1");
+            editor.addConnection(s3, s4, "output_1", "input_1");
+            editor.addConnection(s4, s5, "output_1", "input_1");
+
+            // FAILURE Branch (output_2 = FALSE)
+            editor.addConnection(n12, f1, "output_2", "input_1");
+            editor.addConnection(f1, f2, "output_1", "input_1");
+            editor.addConnection(f2, f3, "output_1", "input_1");
         }
 
         // LOAD ON PAGE STARTUP:
         loadAwesomeBadgeWorkflow();
 
-        // Load Example Badge Engine Flow (When Reset button clicked)
+        // Load Employee Onboarding Flow (When Reset button clicked)
         document.getElementById('btnLoadExample').addEventListener('click', () => {
             loadAwesomeBadgeWorkflow();
         });
@@ -343,7 +545,7 @@
             activeExecutionId = execId;
             currentWaitingNodes = new Set();
             if (livePollInterval) clearInterval(livePollInterval);
-            
+
             // Clean previous states
             document.querySelectorAll('.drawflow-node').forEach(node => {
                 node.classList.remove('status-completed', 'status-waiting', 'status-failed');
@@ -355,27 +557,27 @@
                 try {
                     const res = await fetch('/api/status?execution_id=' + execId);
                     if (!res.ok) return;
-                    const statusMap = await res.json(); 
-                    
+                    const statusMap = await res.json();
+
                     const newWaitingNodes = new Set();
 
                     Object.keys(statusMap).forEach(nodeId => {
-                        const purelyNumericId = nodeId.split('-')[1]; 
+                        const purelyNumericId = nodeId.split('-')[1];
                         const nodeElement = document.getElementById("node-" + purelyNumericId);
-                        
+
                         if (nodeElement) {
                             nodeElement.classList.remove('status-completed', 'status-waiting', 'status-failed');
-                            
+
                             const state = statusMap[nodeId].status;
                             const errorMsg = statusMap[nodeId].error;
-                            
+
                             if (state === "COMPLETED") nodeElement.classList.add('status-completed');
                             else if (state === "WAITING") {
                                 nodeElement.classList.add('status-waiting');
                                 newWaitingNodes.add(nodeId); // dynamically catch waiting nodes
                             }
                             else if (state === "FAILED" || state === "CANCELLED" || (state === "PENDING" && errorMsg)) nodeElement.classList.add('status-failed');
-                            
+
                             // Error box styling
                             let errorBox = nodeElement.querySelector('.node-error-box');
                             if ((state === "FAILED" || state === "PENDING") && errorMsg) {
@@ -403,17 +605,22 @@
                     if (waitingsChanged) {
                         currentWaitingNodes = newWaitingNodes;
                         const selectEl = document.getElementById('sigNodeId');
-                        
+
                         if (currentWaitingNodes.size === 0) {
                             selectEl.innerHTML = '<option value="">O an Bekleyen Sinyal Yok...</option>';
+                            document.getElementById('signalHint').style.display = 'none';
                         } else {
                             selectEl.innerHTML = '';
                             currentWaitingNodes.forEach(sid => {
                                 let opt = document.createElement('option');
-                                opt.value = sid; 
+                                opt.value = sid;
                                 opt.innerText = sid + " (Tetikleme Bekliyor ⚡)";
                                 selectEl.appendChild(opt);
                             });
+                            // Update hint for first waiting signal
+                            if (currentWaitingNodes.size > 0) {
+                                updateSignalHint(selectEl.value || Array.from(currentWaitingNodes)[0]);
+                            }
                         }
                     }
                 } catch(e) { /* ignore */ }
@@ -424,11 +631,11 @@
         document.getElementById('btnRun').addEventListener('click', async () => {
             const rawData = editor.export().drawflow.Home.data;
             const payload = { nodes: [], edges: [] };
-            
+
             Object.values(rawData).forEach(n => {
                 let realNodeId = "node-" + n.id;
                 payload.nodes.push({ id: realNodeId, name: n.name, data: n.data });
-                
+
                 if (n.outputs) {
                     Object.keys(n.outputs).forEach(outKey => {
                         let branchCondition = "";
@@ -449,25 +656,26 @@
 
             const btn = document.getElementById('btnRun');
             btn.innerText = "⏳ Deploying...";
-            
+
             try {
-                const res = await fetch('/api/run', {
+                // Add default user_id and action for testing
+                const res = await fetch('/api/run?user_id=2&action=onboarding_started', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(payload)
                 });
-                
+
                 let errorText = "";
                 if (!res.ok) {
                     errorText = await res.text();
                     throw new Error(errorText);
                 }
-                
+
                 const response = await res.json();
-                
+
                 if (res.ok) {
                     btn.innerText = "✅ Deployed! Exec: " + response.execution_id.substring(0,8);
-                    
+
                     document.getElementById('liveControl').style.display = 'block';
                     document.getElementById('sigExecId').value = response.execution_id;
                     const selectEl = document.getElementById('sigNodeId');
@@ -487,14 +695,58 @@
             }
         });
 
+        // Update hint when signal selection changes
+        document.getElementById('sigNodeId').addEventListener('change', (e) => {
+            updateSignalHint(e.target.value);
+        });
+
+        // Function to show context-aware hints for signals
+        function updateSignalHint(nodeId) {
+            const hintBox = document.getElementById('signalHint');
+            const hintText = document.getElementById('signalHintText');
+
+            if (!nodeId) {
+                hintBox.style.display = 'none';
+                return;
+            }
+
+            // Get node element to check its position/context
+            const allNodes = editor.export().drawflow.Home.data;
+            let nodeIndex = 0;
+            let totalSignals = 0;
+
+            Object.values(allNodes).forEach(n => {
+                if (n.name === 'signal') {
+                    totalSignals++;
+                    if ('node-' + n.id === nodeId) {
+                        nodeIndex = totalSignals;
+                    }
+                }
+            });
+
+            hintBox.style.display = 'block';
+
+            if (nodeIndex === 1) {
+                hintText.innerHTML = 'Bu <strong>belge yükleme</strong> signal\'i. Key/Value <strong>boş bırakın</strong> ve sadece devam etmek için tetikleyin.';
+            } else if (nodeIndex === 2) {
+                hintText.innerHTML = '<strong>⚠️ KRİTİK!</strong> Admin onayı! <code>Key: status</code> ve <code>Value: verified</code> yazın (başarı için) veya başka değer (hata için). Sonraki Condition bunu kontrol eder!';
+                hintBox.style.borderLeftColor = '#f59e0b';
+                hintBox.style.background = '#451a03';
+            } else if (nodeIndex === 3) {
+                hintText.innerHTML = 'Eğitim tamamlama signal\'i. Key/Value <strong>boş bırakın</strong>, sadece devam için tetikleyin.';
+            } else {
+                hintText.innerHTML = 'Signal node tetikleniyor. Gerekirse Key/Value ekleyin.';
+            }
+        }
+
         // Send Signal Logic
         document.getElementById('btnSendSignal').addEventListener('click', async () => {
             const execId = document.getElementById('sigExecId').value;
             const nodeId = document.getElementById('sigNodeId').value;
-            
+
             const key = document.getElementById('sigKey').value.trim();
             const val = document.getElementById('sigValue').value.trim();
-            
+
             if (!nodeId) {
                 alert("Lütfen bir bekleyen Node seçin!");
                 return;
@@ -508,7 +760,7 @@
 
             const btn = document.getElementById('btnSendSignal');
             btn.innerText = "⏳ Sending...";
-            
+
             try {
                 const res = await fetch('/api/signal', {
                     method: 'POST',
@@ -534,6 +786,12 @@
                 alert("Ağ hatası.");
                 btn.innerText = "⚡ Trigger Signal";
             }
+        });
+
+        // Help Panel Toggle
+        document.getElementById('btnHelp').addEventListener('click', () => {
+            const panel = document.getElementById('helpPanel');
+            panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
         });
     </script>
 </body>
