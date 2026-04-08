@@ -35,10 +35,16 @@ func wfKey(ns, id string) string { return fmt.Sprintf("wf:%s:%s", ns, id) }
 func execKey(ns, id string) string { return fmt.Sprintf("ex:%s:%s", ns, id) }
 func stepKey(ns, id string) string { return fmt.Sprintf("step:%s:%s", ns, id) }
 func pendingSet(ns string) string { return fmt.Sprintf("pending:%s", ns) }
+func wfListKey(ns string) string { return fmt.Sprintf("wfs:%s", ns) }
+func execListKey(ns string) string { return fmt.Sprintf("execs:%s", ns) }
+func execStepsKey(ns, execID string) string { return fmt.Sprintf("ex_steps:%s:%s", ns, execID) }
 
 func (r *RedisStorage) SaveWorkflow(ctx context.Context, namespace string, wf *models.Workflow) error {
 	data, _ := json.Marshal(wf)
-	return r.client.Set(ctx, wfKey(namespace, wf.ID), data, 0).Err()
+	if err := r.client.Set(ctx, wfKey(namespace, wf.ID), data, 0).Err(); err != nil {
+		return err
+	}
+	return r.client.SAdd(ctx, wfListKey(namespace), wf.ID).Err()
 }
 
 func (r *RedisStorage) GetWorkflow(ctx context.Context, namespace string, id string) (*models.Workflow, error) {
@@ -52,13 +58,26 @@ func (r *RedisStorage) GetWorkflow(ctx context.Context, namespace string, id str
 }
 
 func (r *RedisStorage) ListWorkflows(ctx context.Context, namespace string) ([]*models.Workflow, error) {
-	// Simplified: in production, use a dedicated set for listed IDs
-	return nil, fmt.Errorf("not implemented in MVP")
+	ids, err := r.client.SMembers(ctx, wfListKey(namespace)).Result()
+	if err != nil {
+		return nil, err
+	}
+	var wfs []*models.Workflow
+	for _, id := range ids {
+		wf, err := r.GetWorkflow(ctx, namespace, id)
+		if err == nil {
+			wfs = append(wfs, wf)
+		}
+	}
+	return wfs, nil
 }
 
 func (r *RedisStorage) CreateExecution(ctx context.Context, namespace string, exec *models.Execution) error {
 	data, _ := json.Marshal(exec)
-	return r.client.Set(ctx, execKey(namespace, exec.ID), data, 0).Err()
+	if err := r.client.Set(ctx, execKey(namespace, exec.ID), data, 0).Err(); err != nil {
+		return err
+	}
+	return r.client.SAdd(ctx, execListKey(namespace), exec.ID).Err()
 }
 
 func (r *RedisStorage) GetExecution(ctx context.Context, namespace string, id string) (*models.Execution, error) {
@@ -76,22 +95,17 @@ func (r *RedisStorage) UpdateExecution(ctx context.Context, namespace string, ex
 }
 
 func (r *RedisStorage) ListExecutions(ctx context.Context, namespace string) ([]*models.Execution, error) {
-	// Simple MVP implementation: search for keys matching the namespace execution pattern
-	pattern := fmt.Sprintf("ex:%s:*", namespace)
-	keys, err := r.client.Keys(ctx, pattern).Result()
+	ids, err := r.client.SMembers(ctx, execListKey(namespace)).Result()
 	if err != nil {
 		return nil, err
 	}
 
 	var execs []*models.Execution
-	for _, key := range keys {
-		data, err := r.client.Get(ctx, key).Bytes()
-		if err != nil {
-			continue
+	for _, id := range ids {
+		exec, err := r.GetExecution(ctx, namespace, id)
+		if err == nil {
+			execs = append(execs, exec)
 		}
-		var exec models.Execution
-		json.Unmarshal(data, &exec)
-		execs = append(execs, &exec)
 	}
 	return execs, nil
 }
@@ -101,6 +115,10 @@ func (r *RedisStorage) CreateExecutionStep(ctx context.Context, namespace string
 	data, _ := json.Marshal(step)
 	err := r.client.Set(ctx, stepKey(namespace, step.ID), data, 0).Err()
 	if err != nil {
+		return err
+	}
+
+	if err := r.client.SAdd(ctx, execStepsKey(namespace, step.ExecutionID), step.ID).Err(); err != nil {
 		return err
 	}
 
@@ -131,24 +149,16 @@ func (r *RedisStorage) UpdateExecutionStep(ctx context.Context, namespace string
 }
 
 func (r *RedisStorage) GetExecutionSteps(ctx context.Context, namespace string, executionID string) ([]*models.ExecutionStep, error) {
-	// In production we would maintain a set of step IDs per execution
-	// For MVP/Verification, we use KEYS (expensive but okay for small scale)
-	pattern := fmt.Sprintf("step:%s:*", namespace)
-	keys, err := r.client.Keys(ctx, pattern).Result()
+	ids, err := r.client.SMembers(ctx, execStepsKey(namespace, executionID)).Result()
 	if err != nil {
 		return nil, err
 	}
 
 	var steps []*models.ExecutionStep
-	for _, key := range keys {
-		data, err := r.client.Get(ctx, key).Bytes()
-		if err != nil {
-			continue
-		}
-		var step models.ExecutionStep
-		json.Unmarshal(data, &step)
-		if step.ExecutionID == executionID {
-			steps = append(steps, &step)
+	for _, id := range ids {
+		step, err := r.GetExecutionStepByID(ctx, namespace, id)
+		if err == nil {
+			steps = append(steps, step)
 		}
 	}
 	return steps, nil
