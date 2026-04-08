@@ -84,6 +84,18 @@ func (s *MemoryStorage) UpdateExecution(ctx context.Context, namespace string, e
 	return nil
 }
 
+func (s *MemoryStorage) ListExecutions(ctx context.Context, namespace string) ([]*models.Execution, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	var execs []*models.Execution
+	for _, exec := range s.executions {
+		if exec.Namespace == namespace {
+			execs = append(execs, exec)
+		}
+	}
+	return execs, nil
+}
+
 func (s *MemoryStorage) CreateExecutionStep(ctx context.Context, namespace string, step *models.ExecutionStep) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()

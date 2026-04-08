@@ -161,6 +161,18 @@ func (e *Engine) CancelExecution(ctx context.Context, namespace string, execID s
 	return e.storage.UpdateExecution(ctx, namespace, exec)
 }
 
+func (e *Engine) FailExecution(ctx context.Context, namespace string, execID string, message string) error {
+	exec, err := e.storage.GetExecution(ctx, namespace, execID)
+	if err != nil {
+		return err
+	}
+	exec.Status = models.TaskFailed
+	exec.ErrorMessage = message
+	now := time.Now()
+	exec.FinishedAt = &now
+	return e.storage.UpdateExecution(ctx, namespace, exec)
+}
+
 func (e *Engine) SignalExecution(ctx context.Context, namespace string, execID string, nodeID string, output string) error {
 	steps, err := e.storage.GetExecutionSteps(ctx, namespace, execID)
 	if err != nil {
@@ -185,6 +197,10 @@ func (e *Engine) SignalExecution(ctx context.Context, namespace string, execID s
 
 func (e *Engine) GetExecutionStatus(ctx context.Context, namespace string, execID string) (*models.Execution, error) {
 	return e.storage.GetExecution(ctx, namespace, execID)
+}
+
+func (e *Engine) GetLogger() *slog.Logger {
+	return e.logger
 }
 
 func (e *Engine) GetExecutionSteps(ctx context.Context, namespace string, execID string) ([]*models.ExecutionStep, error) {
@@ -233,8 +249,15 @@ func (e *Engine) checkAndFinishExecution(ctx context.Context, exec *models.Execu
 	}
 
 	allFinished := true
+	hasFailure := false
 	var finalOutput string
+	var firstError string
+
 	for _, s := range steps {
+		if s.Status == models.TaskFailed {
+			hasFailure = true
+			firstError = s.Error
+		}
 		if s.Status != models.TaskCompleted && s.Status != models.TaskFailed && s.Status != models.TaskSkipped {
 			allFinished = false
 			break
@@ -243,8 +266,13 @@ func (e *Engine) checkAndFinishExecution(ctx context.Context, exec *models.Execu
 	}
 
 	if allFinished {
-		exec.Status = models.TaskCompleted
-		exec.Output = finalOutput
+		if hasFailure {
+			exec.Status = models.TaskFailed
+			exec.ErrorMessage = firstError
+		} else {
+			exec.Status = models.TaskCompleted
+			exec.Output = finalOutput
+		}
 		now := time.Now()
 		exec.FinishedAt = &now
 		return e.storage.UpdateExecution(ctx, exec.Namespace, exec)

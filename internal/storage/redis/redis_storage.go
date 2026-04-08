@@ -75,6 +75,27 @@ func (r *RedisStorage) UpdateExecution(ctx context.Context, namespace string, ex
 	return r.CreateExecution(ctx, namespace, exec)
 }
 
+func (r *RedisStorage) ListExecutions(ctx context.Context, namespace string) ([]*models.Execution, error) {
+	// Simple MVP implementation: search for keys matching the namespace execution pattern
+	pattern := fmt.Sprintf("ex:%s:*", namespace)
+	keys, err := r.client.Keys(ctx, pattern).Result()
+	if err != nil {
+		return nil, err
+	}
+
+	var execs []*models.Execution
+	for _, key := range keys {
+		data, err := r.client.Get(ctx, key).Bytes()
+		if err != nil {
+			continue
+		}
+		var exec models.Execution
+		json.Unmarshal(data, &exec)
+		execs = append(execs, &exec)
+	}
+	return execs, nil
+}
+
 func (r *RedisStorage) CreateExecutionStep(ctx context.Context, namespace string, step *models.ExecutionStep) error {
 	data, _ := json.Marshal(step)
 	err := r.client.Set(ctx, stepKey(namespace, step.ID), data, 0).Err()

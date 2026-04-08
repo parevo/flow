@@ -21,7 +21,7 @@ type StartableEngine interface {
 
 func NewCronManager(engine StartableEngine, logger *slog.Logger) *CronManager {
 	return &CronManager{
-		cron:   cron.New(),
+		cron:   cron.New(cron.WithSeconds()),
 		engine: engine,
 		logger: logger,
 	}

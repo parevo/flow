@@ -175,6 +175,29 @@ func (s *SQLStorage) UpdateExecution(ctx context.Context, namespace string, exec
 	return err
 }
 
+func (s *SQLStorage) ListExecutions(ctx context.Context, namespace string) ([]*models.Execution, error) {
+	query := "SELECT * FROM executions WHERE namespace = ?"
+	if _, ok := s.dialect.(PostgresDialect); ok {
+		query = "SELECT * FROM executions WHERE namespace = $1"
+	}
+	var execs []*models.Execution
+	err := s.db.SelectContext(ctx, &execs, query, namespace)
+	if err != nil {
+		return nil, err
+	}
+
+	if s.crypto != nil {
+		for _, exec := range execs {
+			dInput, _ := s.crypto.Decrypt(exec.Input)
+			exec.Input = dInput
+			dOutput, _ := s.crypto.Decrypt(exec.Output)
+			exec.Output = dOutput
+		}
+	}
+
+	return execs, nil
+}
+
 func (s *SQLStorage) CreateExecutionStep(ctx context.Context, namespace string, step *models.ExecutionStep) error {
 	step.Namespace = namespace
 	input := step.Input

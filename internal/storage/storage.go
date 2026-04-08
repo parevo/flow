@@ -15,6 +15,7 @@ type Storage interface {
 	CreateExecution(ctx context.Context, namespace string, exec *models.Execution) error
 	GetExecution(ctx context.Context, namespace string, id string) (*models.Execution, error)
 	UpdateExecution(ctx context.Context, namespace string, exec *models.Execution) error
+	ListExecutions(ctx context.Context, namespace string) ([]*models.Execution, error)
 
 	// ExecutionStep operations
 	CreateExecutionStep(ctx context.Context, namespace string, step *models.ExecutionStep) error

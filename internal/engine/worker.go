@@ -148,6 +148,9 @@ func (w *Worker) processOne(ctx context.Context) {
 		step.FinishedAt = &now
 		GetTelemetry().IncFailed()
 		w.engine.storage.UpdateExecutionStep(ctx, step.Namespace, step)
+		
+		// Even if it failed, check if the whole workflow should be marked as FAILED now
+		w.engine.checkAndFinishExecution(ctx, exec)
 
 		if node.CompensateNodeID != "" {
 			w.engine.logger.Info("Triggering Saga Compensation", "execution", exec.ID, "failed_node", node.ID, "compensation_node", node.CompensateNodeID)
