@@ -127,6 +127,14 @@ func (e *Engine) CompleteStep(ctx context.Context, step *models.ExecutionStep, o
 	return nil
 }
 
+func (e *Engine) GetExecutionStatus(ctx context.Context, namespace string, execID string) (*models.Execution, error) {
+	return e.storage.GetExecution(ctx, namespace, execID)
+}
+
+func (e *Engine) GetExecutionSteps(ctx context.Context, namespace string, execID string) ([]*models.ExecutionStep, error) {
+	return e.storage.GetExecutionSteps(ctx, namespace, execID)
+}
+
 func (e *Engine) isNodeReady(ctx context.Context, nodeID string, namespace string, execID string, g *Graph) (bool, error) {
 	predecessors := []string{}
 	for source, edges := range g.Edges {

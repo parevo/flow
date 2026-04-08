@@ -33,6 +33,9 @@ func (w *Worker) SetNamespace(namespace string) {
 
 func (w *Worker) Start(ctx context.Context) {
 	log.Printf("Worker %s started (Namespace: %s)\n", w.id, w.namespace)
+	GetTelemetry().WorkerStarted()
+	defer GetTelemetry().WorkerStopped()
+	
 	ticker := time.NewTicker(w.interval)
 	defer ticker.Stop()
 
