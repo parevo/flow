@@ -1,0 +1,540 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Parevo Flow Studio</title>
+    <!-- Drawflow CSS & JS -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/jerosoler/Drawflow/dist/drawflow.min.css">
+    <script src="https://cdn.jsdelivr.net/gh/jerosoler/Drawflow/dist/drawflow.min.js"></script>
+    <style>
+        :root {
+            --bg-dark: #0f172a;
+            --brand: #3b82f6;
+            --surface: #1e293b;
+            --border: #334155;
+            --dfBackgroundColor: #0f172a;
+            --dfBackgroundSize: 20px;
+            --dfBackgroundImage: linear-gradient(to right, #1e293b 1px, transparent 1px), linear-gradient(to bottom, #1e293b 1px, transparent 1px);
+        }
+        body { 
+            margin: 0; font-family: 'Inter', system-ui, sans-serif; 
+            background: var(--bg-dark); color: #fff; display: flex;
+            height: 100vh; overflow: hidden;
+        }
+        .header {
+            position: absolute; top: 0; left: 0; right: 0; height: 60px;
+            background: rgba(30,41,59, 0.7); backdrop-filter: blur(10px);
+            border-bottom: 1px solid var(--border); display: flex;
+            align-items: center; justify-content: space-between; padding: 0 20px; z-index: 10;
+        }
+        .header h1 { font-size: 18px; margin: 0; background: linear-gradient(90deg, #60a5fa, #c084fc); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;}
+        
+        .header-buttons { display: flex; gap: 10px; }
+        .btn { padding: 8px 16px; border-radius: 6px; font-weight: bold; cursor: pointer; transition: all 0.2s; border: none; color: white;}
+        .btn-load { background: #334155; border: 1px solid #475569; }
+        .btn-load:hover { background: #475569; }
+        .btn-run {
+            background: linear-gradient(90deg, #3b82f6, #8b5cf6); 
+            box-shadow: 0 4px 15px rgba(59, 130, 246, 0.4);
+        }
+        .btn-run:hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(59, 130, 246, 0.6); }
+        
+        .wrapper { display: flex; width: 100%; margin-top: 60px;}
+        .sidebar {
+            width: 250px; background: var(--surface); border-right: 1px solid var(--border);
+            padding: 20px; box-sizing: border-box; z-index: 5;
+            display: flex; flex-direction: column; gap: 10px;
+            overflow-y: auto;
+        }
+        .sidebar h3 { font-size: 14px; text-transform: uppercase; color: #94a3b8; letter-spacing: 1px;}
+        .drag-item {
+            background: var(--bg-dark); border: 1px solid var(--border);
+            padding: 10px; border-radius: 6px; cursor: grab;
+            display: flex; align-items: center; gap: 10px;
+            transition: border-color 0.2s; font-size: 13px;
+        }
+        .drag-item:hover { border-color: var(--brand); }
+        
+        #drawflow { width: calc(100vw - 250px); height: calc(100vh - 60px); position: relative; }
+
+        /* Customizing Drawflow default UI */
+        .drawflow .drawflow-node {
+            background: var(--surface); border: 1px solid var(--border);
+            border-radius: 8px; color: white; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1); width: 220px;
+        }
+        .drawflow .drawflow-node.selected { border: 1px solid var(--brand); background: #1e293b; }
+        .drawflow .connection .main-path { stroke: #60a5fa; stroke-width: 3px; }
+        .drawflow-node .inputs .input { left: -15px; background: var(--brand); border: 2px solid var(--surface); }
+        .drawflow-node .outputs .output { right: -15px; background: var(--brand); border: 2px solid var(--surface); }
+        
+        /* Multiple Outputs */
+        .drawflow-node.condition .outputs .output_1 { right: -15px; background: #22c55e; } /* true */
+        .drawflow-node.condition .outputs .output_2 { right: -15px; background: #ef4444; } /* false */
+
+        .node-box { padding: 10px; display:flex; flex-direction: column; gap: 5px;}
+        .node-title { font-weight: bold; font-size: 14px; margin-bottom: 5px; display:flex; align-items: center; justify-content: space-between;}
+        .node-id-label { font-size: 10px; color: #94a3b8; background: #0f172a; padding: 2px 5px; border-radius: 4px; }
+        .node-box input, .node-box select {
+            width: 100%; background: #0f172a; border: 1px solid #334155; 
+            color: #fff; padding: 6px; border-radius: 4px; box-sizing:border-box; font-size: 12px;
+        }
+
+        /* Floating Control Panel for Signals */
+        .control-panel {
+            position: absolute; bottom: 30px; right: 30px; background: var(--surface);
+            border: 1px solid var(--brand); border-radius: 10px; padding: 20px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.5); width: 300px; z-index: 100;
+        }
+        .control-panel h3 { margin-top: 0; font-size: 15px; border-bottom: 1px solid var(--border); padding-bottom: 10px; margin-bottom: 15px;}
+        .control-panel input, .control-panel select { width: 100%; background: var(--bg-dark); color: white; border: 1px solid var(--border); padding: 8px; border-radius: 4px; margin-bottom: 10px; box-sizing:border-box; font-size: 12px; }
+        .control-panel button { width: 100%; }
+
+        /* LIVE TRACKING CSS CLASSES */
+        @keyframes pulseWaiting {
+            0% { box-shadow: 0 0 0 0 rgba(234, 179, 8, 0.7); }
+            70% { box-shadow: 0 0 0 10px rgba(234, 179, 8, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(234, 179, 8, 0); }
+        }
+
+        .drawflow .drawflow-node.status-completed {
+            border: 2px solid #22c55e !important;
+            transition: border 0.3s ease;
+        }
+
+        .drawflow .drawflow-node.status-waiting {
+            border: 2px solid #eab308 !important;
+            animation: pulseWaiting 2s infinite;
+        }
+
+        .drawflow .drawflow-node.status-failed {
+            border: 2px solid #ef4444 !important;
+            box-shadow: 0 0 15px rgba(239, 68, 68, 0.3) !important;
+        }
+
+        .node-error-box {
+            margin-top: 10px;
+            background: rgba(239, 68, 68, 0.2);
+            border: 1px solid #ef4444;
+            color: #fca5a5;
+            padding: 6px;
+            border-radius: 4px;
+            font-size: 10px;
+            word-break: break-all;
+            line-height: 1.4;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🌌 Parevo Flow Studio</h1>
+        <div class="header-buttons">
+            <button id="btnLoadExample" class="btn btn-load">📚 Reset Flow</button>
+            <button id="btnRun" class="btn btn-run">▶ Deploy & Run</button>
+        </div>
+    </div>
+    <div class="wrapper">
+        <div class="sidebar">
+            <h3>Nodes</h3>
+            <div class="drag-item" draggable="true" ondragstart="drag(event)" data-node="log">
+                📝 Log Action
+            </div>
+            <div class="drag-item" draggable="true" ondragstart="drag(event)" data-node="wait">
+                ⏱️ Wait (Sleep)
+            </div>
+            <div class="drag-item" draggable="true" ondragstart="drag(event)" data-node="http">
+                🌐 HTTP Request
+            </div>
+            <div class="drag-item" draggable="true" ondragstart="drag(event)" data-node="signal">
+                🛎️ Signal (Wait External)
+            </div>
+            <div class="drag-item" draggable="true" ondragstart="drag(event)" data-node="progress">
+                📊 User Progress
+            </div>
+            <div class="drag-item" draggable="true" ondragstart="drag(event)" data-node="condition">
+                🔀 Condition (Branch)
+            </div>
+        </div>
+        <div id="drawflow" ondrop="drop(event)" ondragover="allowDrop(event)">
+            <!-- Signal Control Panel -->
+            <div id="liveControl" class="control-panel" style="display: none;">
+                <h3>📡 Live Execution Signals</h3>
+                <input type="text" id="sigExecId" placeholder="Execution ID" disabled>
+                <select id="sigNodeId">
+                    <option value="">Sinyal Bekleniyor...</option>
+                </select>
+                
+                <div style="font-size:11px; margin-bottom:5px; color:#94a3b8;">Aktarılacak Veriler (Örn Condition için):</div>
+                <div style="display:flex; gap:5px; margin-bottom:10px;">
+                    <input type="text" id="sigKey" placeholder="Anahtar (status)">
+                    <input type="text" id="sigValue" placeholder="Değer (verified)">
+                </div>
+                
+                <button id="btnSendSignal" class="btn btn-run">⚡ Trigger Signal</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        var id = document.getElementById("drawflow");
+        const editor = new Drawflow(id);
+        editor.reroute = true;
+        editor.start();
+
+        let livePollInterval = null;
+        let activeExecutionId = null;
+        let currentWaitingNodes = new Set(); // For dropdown tracking
+
+        function addNodeToCanvas(name, pos_x, pos_y) {
+            let html = "";
+            let data = {};
+            let inputs = 1;
+            let outputs = 1;
+            let currentId = "node-" + editor.nodeId; // Drawflow next node id
+
+            let headerHtml = (title) => `
+                <div class="node-title">
+                    <span>${title}</span>
+                    <span class="node-id-label">${currentId}</span>
+                </div>
+            `;
+
+            if (name === 'log') {
+                html = `
+                    <div class="node-box">
+                        ${headerHtml('📝 Log Action')}
+                        <input type="text" df-message placeholder="Message">
+                    </div>`;
+                data = { "message": "My Message" };
+            } 
+            else if (name === 'wait') {
+                html = `
+                    <div class="node-box">
+                        ${headerHtml('⏱️ Wait (Sleep)')}
+                        <input type="text" df-duration placeholder="Duration (e.g. 5s, 24h)">
+                    </div>`;
+                data = { "duration": "5s" };
+            }
+            else if (name === 'http') {
+                html = `
+                    <div class="node-box">
+                        ${headerHtml('🌐 HTTP Request')}
+                        <select df-method>
+                            <option value="GET">GET</option>
+                            <option value="POST">POST</option>
+                        </select>
+                        <input type="text" df-url placeholder="https://api.example.com">
+                    </div>`;
+                data = { "url": "https://api.github.com", "method": "GET" };
+            }
+            else if (name === 'signal') {
+                html = `
+                    <div class="node-box">
+                        ${headerHtml('🛎️ Wait Signal')}
+                        <input type="text" df-timeout placeholder="Timeout (e.g. 24h)">
+                    </div>`;
+                data = { "timeout": "24h" };
+            }
+            else if (name === 'progress') {
+                html = `
+                    <div class="node-box">
+                        ${headerHtml('📊 Progress')}
+                        <input type="text" df-step_name placeholder="e.g. Training OHS">
+                        <input type="text" df-progress placeholder="Progress % (e.g. 33%)">
+                    </div>`;
+                data = { "step_name": "Task Completed", "progress": "10%" };
+            }
+            else if (name === 'condition') {
+                outputs = 2; // True & False exits
+                html = `
+                    <div class="node-box">
+                        ${headerHtml('🔀 Condition')}
+                        <input type="text" df-variable placeholder="Variable Name">
+                        <select df-operator>
+                            <option value="==">== (Equals)</option>
+                            <option value="!=">!= (Not Equals)</option>
+                        </select>
+                        <input type="text" df-value placeholder="Compare Value">
+                        <small style="color:#94a3b8; font-size:10px; margin-top:5px; align-self:flex-end;">Green: True, Red: False</small>
+                    </div>`;
+                data = { "variable": "status", "operator": "==", "value": "verified" };
+            }
+
+            return editor.addNode(name, inputs, outputs, pos_x, pos_y, name, data, html);
+        }
+
+        function allowDrop(ev) { ev.preventDefault(); }
+        function drag(ev) { ev.dataTransfer.setData("node", ev.target.getAttribute('data-node')); }
+        function drop(ev) {
+            ev.preventDefault();
+            var node = ev.dataTransfer.getData("node");
+            var pos_x = ev.clientX * ( editor.precanvas.clientWidth / (editor.precanvas.clientWidth * editor.zoom)) - (editor.precanvas.getBoundingClientRect().x * ( editor.precanvas.clientWidth / (editor.precanvas.clientWidth * editor.zoom)));
+            var pos_y = ev.clientY * ( editor.precanvas.clientHeight / (editor.precanvas.clientHeight * editor.zoom)) - (editor.precanvas.getBoundingClientRect().y * ( editor.precanvas.clientHeight / (editor.precanvas.clientHeight * editor.zoom)));
+            
+            addNodeToCanvas(node, pos_x, pos_y);
+        }
+
+        function loadAwesomeBadgeWorkflow() {
+            editor.clearModuleSelected(); // clears the canvas completely
+            
+            // 1. Initial Document Request
+            let id1 = addNodeToCanvas('signal', 50, 300);
+            editor.updateNodeDataFromId(id1, { "timeout": "14 days" });
+            
+            // 2. Uploaded
+            let id2 = addNodeToCanvas('progress', 350, 300);
+            editor.updateNodeDataFromId(id2, { "step_name": "Kayıt Belgeleri Alındı", "progress": "30%" });
+
+            // 2.5 Admin Approval Wait! (This pauses the execution before condition)
+            let adminSig = addNodeToCanvas('signal', 650, 300);
+            editor.updateNodeDataFromId(adminSig, { "timeout": "48h" });
+            
+            // 3. Validation Check
+            let cond = addNodeToCanvas('condition', 950, 300);
+            editor.updateNodeDataFromId(cond, { "variable": "status", "operator": "==", "value": "verified" });
+
+            // 4. Branch TRUE -> Training Phase
+            let idSuccess1 = addNodeToCanvas('progress', 1250, 150);
+            editor.updateNodeDataFromId(idSuccess1, { "step_name": "Sistem Onayı (Geçerli)", "progress": "50%" });
+
+            let idSuccess2 = addNodeToCanvas('signal', 1550, 150);
+            editor.updateNodeDataFromId(idSuccess2, { "timeout": "72h" });
+
+            let idSuccess3 = addNodeToCanvas('progress', 1850, 150);
+            editor.updateNodeDataFromId(idSuccess3, { "step_name": "İSG Eğitimi Bitti", "progress": "80%" });
+            
+            // Final Certification
+            let idSuccess4 = addNodeToCanvas('progress', 2150, 150);
+            editor.updateNodeDataFromId(idSuccess4, { "step_name": "🏅 FIELD EXPERT", "progress": "100%" });
+
+            // 5. Branch FALSE -> Account Blocked / Error
+            let idFail1 = addNodeToCanvas('log', 1250, 450);
+            editor.updateNodeDataFromId(idFail1, { "message": "Belge Doğrulanamadı. İPTAL EDİLİYOR!" });
+
+            let idFail2 = addNodeToCanvas('progress', 1550, 450);
+            editor.updateNodeDataFromId(idFail2, { "step_name": "ASKIYA ALINDI / İPTAL EDİLDİ", "progress": "0%" });
+
+            // Connections
+            editor.addConnection(id1, id2, "output_1", "input_1");
+            editor.addConnection(id2, adminSig, "output_1", "input_1");
+            editor.addConnection(adminSig, cond, "output_1", "input_1");
+
+            // Cond Outputs: output_1 is TRUE (Green), output_2 is FALSE (Red)
+            editor.addConnection(cond, idSuccess1, "output_1", "input_1");
+            editor.addConnection(idSuccess1, idSuccess2, "output_1", "input_1");
+            editor.addConnection(idSuccess2, idSuccess3, "output_1", "input_1");
+            editor.addConnection(idSuccess3, idSuccess4, "output_1", "input_1");
+
+            // False connection logic
+            editor.addConnection(cond, idFail1, "output_2", "input_1");
+            editor.addConnection(idFail1, idFail2, "output_1", "input_1");
+        }
+
+        // LOAD ON PAGE STARTUP:
+        loadAwesomeBadgeWorkflow();
+
+        // Load Example Badge Engine Flow (When Reset button clicked)
+        document.getElementById('btnLoadExample').addEventListener('click', () => {
+            loadAwesomeBadgeWorkflow();
+        });
+
+        // LIVE TRACKING POLLING LOGIC
+        function startLiveTracking(execId) {
+            activeExecutionId = execId;
+            currentWaitingNodes = new Set();
+            if (livePollInterval) clearInterval(livePollInterval);
+            
+            // Clean previous states
+            document.querySelectorAll('.drawflow-node').forEach(node => {
+                node.classList.remove('status-completed', 'status-waiting', 'status-failed');
+                const errBox = node.querySelector('.node-error-box');
+                if (errBox) errBox.remove();
+            });
+
+            livePollInterval = setInterval(async () => {
+                try {
+                    const res = await fetch('/api/status?execution_id=' + execId);
+                    if (!res.ok) return;
+                    const statusMap = await res.json(); 
+                    
+                    const newWaitingNodes = new Set();
+
+                    Object.keys(statusMap).forEach(nodeId => {
+                        const purelyNumericId = nodeId.split('-')[1]; 
+                        const nodeElement = document.getElementById("node-" + purelyNumericId);
+                        
+                        if (nodeElement) {
+                            nodeElement.classList.remove('status-completed', 'status-waiting', 'status-failed');
+                            
+                            const state = statusMap[nodeId].status;
+                            const errorMsg = statusMap[nodeId].error;
+                            
+                            if (state === "COMPLETED") nodeElement.classList.add('status-completed');
+                            else if (state === "WAITING") {
+                                nodeElement.classList.add('status-waiting');
+                                newWaitingNodes.add(nodeId); // dynamically catch waiting nodes
+                            }
+                            else if (state === "FAILED" || state === "CANCELLED" || (state === "PENDING" && errorMsg)) nodeElement.classList.add('status-failed');
+                            
+                            // Error box styling
+                            let errorBox = nodeElement.querySelector('.node-error-box');
+                            if ((state === "FAILED" || state === "PENDING") && errorMsg) {
+                                if (!errorBox) {
+                                    errorBox = document.createElement('div');
+                                    errorBox.className = 'node-error-box';
+                                    nodeElement.querySelector('.node-box').appendChild(errorBox);
+                                }
+                                errorBox.innerText = (state === "PENDING" ? "Retrying: " : "Error: ") + errorMsg;
+                            } else if (errorBox) {
+                                errorBox.remove();
+                            }
+                        }
+                    });
+
+                    // Update UI control panel Dropdown dynamically
+                    let waitingsChanged = false;
+                    if (currentWaitingNodes.size !== newWaitingNodes.size) waitingsChanged = true;
+                    else {
+                        for (let id of newWaitingNodes) {
+                            if (!currentWaitingNodes.has(id)) { waitingsChanged = true; break; }
+                        }
+                    }
+
+                    if (waitingsChanged) {
+                        currentWaitingNodes = newWaitingNodes;
+                        const selectEl = document.getElementById('sigNodeId');
+                        
+                        if (currentWaitingNodes.size === 0) {
+                            selectEl.innerHTML = '<option value="">O an Bekleyen Sinyal Yok...</option>';
+                        } else {
+                            selectEl.innerHTML = '';
+                            currentWaitingNodes.forEach(sid => {
+                                let opt = document.createElement('option');
+                                opt.value = sid; 
+                                opt.innerText = sid + " (Tetikleme Bekliyor ⚡)";
+                                selectEl.appendChild(opt);
+                            });
+                        }
+                    }
+                } catch(e) { /* ignore */ }
+            }, 1000);
+        }
+
+        // Export and Send POST
+        document.getElementById('btnRun').addEventListener('click', async () => {
+            const rawData = editor.export().drawflow.Home.data;
+            const payload = { nodes: [], edges: [] };
+            
+            Object.values(rawData).forEach(n => {
+                let realNodeId = "node-" + n.id;
+                payload.nodes.push({ id: realNodeId, name: n.name, data: n.data });
+                
+                if (n.outputs) {
+                    Object.keys(n.outputs).forEach(outKey => {
+                        let branchCondition = "";
+                        if (n.name === "condition") {
+                            branchCondition = (outKey === "output_1") ? "true" : "false";
+                        }
+
+                        n.outputs[outKey].connections.forEach(conn => {
+                            payload.edges.push({
+                                source: realNodeId,
+                                target: "node-" + conn.node,
+                                condition: branchCondition
+                            });
+                        });
+                    });
+                }
+            });
+
+            const btn = document.getElementById('btnRun');
+            btn.innerText = "⏳ Deploying...";
+            
+            try {
+                const res = await fetch('/api/run', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                
+                let errorText = "";
+                if (!res.ok) {
+                    errorText = await res.text();
+                    throw new Error(errorText);
+                }
+                
+                const response = await res.json();
+                
+                if (res.ok) {
+                    btn.innerText = "✅ Deployed! Exec: " + response.execution_id.substring(0,8);
+                    
+                    document.getElementById('liveControl').style.display = 'block';
+                    document.getElementById('sigExecId').value = response.execution_id;
+                    const selectEl = document.getElementById('sigNodeId');
+                    selectEl.innerHTML = '<option value="">İş akışı Analiz Ediliyor...</option>';
+
+                    // START LIVE TRACKING
+                    startLiveTracking(response.execution_id);
+
+                    setTimeout(() => btn.innerText = "▶ Deploy & Run", 3000);
+                } else {
+                    alert("Error: " + response.error);
+                    btn.innerText = "▶ Deploy & Run";
+                }
+            } catch (e) {
+                alert("Error: " + e.message);
+                btn.innerText = "▶ Deploy & Run";
+            }
+        });
+
+        // Send Signal Logic
+        document.getElementById('btnSendSignal').addEventListener('click', async () => {
+            const execId = document.getElementById('sigExecId').value;
+            const nodeId = document.getElementById('sigNodeId').value;
+            
+            const key = document.getElementById('sigKey').value.trim();
+            const val = document.getElementById('sigValue').value.trim();
+            
+            if (!nodeId) {
+                alert("Lütfen bir bekleyen Node seçin!");
+                return;
+            }
+
+            let payloadObj = {};
+            if (key !== "") {
+                payloadObj[key] = val;
+            }
+            const dataStr = JSON.stringify(payloadObj);
+
+            const btn = document.getElementById('btnSendSignal');
+            btn.innerText = "⏳ Sending...";
+            
+            try {
+                const res = await fetch('/api/signal', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        execution_id: execId,
+                        node_id: nodeId,
+                        data: dataStr
+                    })
+                });
+
+                if (res.ok) {
+                    btn.innerText = "✅ Sinyal Gitti!";
+                    // Clear inputs for next usage
+                    document.getElementById('sigKey').value = "";
+                    document.getElementById('sigValue').value = "";
+                    setTimeout(() => btn.innerText = "⚡ Trigger Signal", 2000);
+                } else {
+                    alert("Sinyal yollama başarısız oldu.");
+                    btn.innerText = "⚡ Trigger Signal";
+                }
+            } catch (e) {
+                alert("Ağ hatası.");
+                btn.innerText = "⚡ Trigger Signal";
+            }
+        });
+    </script>
+</body>
+</html>
