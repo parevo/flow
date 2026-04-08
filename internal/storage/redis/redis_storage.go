@@ -97,6 +97,7 @@ func (r *RedisStorage) ListExecutions(ctx context.Context, namespace string) ([]
 }
 
 func (r *RedisStorage) CreateExecutionStep(ctx context.Context, namespace string, step *models.ExecutionStep) error {
+	step.UpdatedAt = time.Now()
 	data, _ := json.Marshal(step)
 	err := r.client.Set(ctx, stepKey(namespace, step.ID), data, 0).Err()
 	if err != nil {
@@ -115,6 +116,7 @@ func (r *RedisStorage) CreateExecutionStep(ctx context.Context, namespace string
 }
 
 func (r *RedisStorage) UpdateExecutionStep(ctx context.Context, namespace string, step *models.ExecutionStep) error {
+	step.UpdatedAt = time.Now()
 	data, _ := json.Marshal(step)
 	err := r.client.Set(ctx, stepKey(namespace, step.ID), data, 0).Err()
 	if err != nil {
@@ -129,8 +131,27 @@ func (r *RedisStorage) UpdateExecutionStep(ctx context.Context, namespace string
 }
 
 func (r *RedisStorage) GetExecutionSteps(ctx context.Context, namespace string, executionID string) ([]*models.ExecutionStep, error) {
-	// Simplified for MVP
-	return nil, nil
+	// In production we would maintain a set of step IDs per execution
+	// For MVP/Verification, we use KEYS (expensive but okay for small scale)
+	pattern := fmt.Sprintf("step:%s:*", namespace)
+	keys, err := r.client.Keys(ctx, pattern).Result()
+	if err != nil {
+		return nil, err
+	}
+
+	var steps []*models.ExecutionStep
+	for _, key := range keys {
+		data, err := r.client.Get(ctx, key).Bytes()
+		if err != nil {
+			continue
+		}
+		var step models.ExecutionStep
+		json.Unmarshal(data, &step)
+		if step.ExecutionID == executionID {
+			steps = append(steps, &step)
+		}
+	}
+	return steps, nil
 }
 
 func (r *RedisStorage) ClaimReadyStep(ctx context.Context, namespace string, workerID string) (*models.ExecutionStep, error) {

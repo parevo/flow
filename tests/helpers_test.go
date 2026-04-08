@@ -56,3 +56,11 @@ func (s *SleepNode) Execute(ctx context.Context, config map[string]interface{}, 
 	return "SLEEP_DONE", nil
 }
 func (s *SleepNode) Validate(config map[string]interface{}) error { return nil }
+
+// DataNode preserves JSON input and merges its result
+type DataNode struct{}
+func (d *DataNode) Execute(ctx context.Context, config map[string]interface{}, input string) (string, error) {
+	fmt.Printf("[TEST] DataNode passing input: %s\n", input)
+	return input, nil
+}
+func (d *DataNode) Validate(config map[string]interface{}) error { return nil }

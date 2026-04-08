@@ -43,7 +43,7 @@ func (s *SubWorkflowNode) Execute(ctx context.Context, config map[string]interfa
 		select {
 		case <-ctx.Done():
 			return "", ctx.Err()
-		case <-time.After(2 * time.Second):
+		case <-time.After(500 * time.Millisecond):
 			exec, err := s.engine.GetExecutionStatus(ctx, namespace, childExecID)
 			if err != nil {
 				return "", err

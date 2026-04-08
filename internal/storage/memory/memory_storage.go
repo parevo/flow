@@ -100,6 +100,7 @@ func (s *MemoryStorage) CreateExecutionStep(ctx context.Context, namespace strin
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	step.Namespace = namespace
+	step.UpdatedAt = time.Now()
 	key := fmt.Sprintf("%s:%s", namespace, step.ID)
 	s.executionSteps[key] = step
 	return nil
@@ -109,6 +110,7 @@ func (s *MemoryStorage) UpdateExecutionStep(ctx context.Context, namespace strin
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	key := fmt.Sprintf("%s:%s", namespace, step.ID)
+	step.UpdatedAt = time.Now()
 	s.executionSteps[key] = step
 	return nil
 }

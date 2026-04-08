@@ -118,6 +118,22 @@ func (e *Engine) CompleteStep(ctx context.Context, step *models.ExecutionStep, o
 
 	// Find next nodes with branch-aware routing
 	nextNodes := g.GetNextNodesWithBranch(step.NodeID, output)
+	
+	// Mark non-matching branch targets as SKIPPED
+	allEdges := g.Edges[step.NodeID]
+	for _, edge := range allEdges {
+		isTaken := false
+		for _, n := range nextNodes {
+			if n == edge.TargetID {
+				isTaken = true
+				break
+			}
+		}
+		if !isTaken {
+			e.skipNode(ctx, exec, g, edge.TargetID)
+		}
+	}
+
 	if len(nextNodes) == 0 {
 		return e.checkAndFinishExecution(ctx, exec)
 	}
@@ -195,6 +211,129 @@ func (e *Engine) SignalExecution(ctx context.Context, namespace string, execID s
 	return e.CompleteStep(ctx, targetStep, output)
 }
 
+func (e *Engine) skipNode(ctx context.Context, exec *models.Execution, g *Graph, nodeID string) {
+	// 1. Check if already skipped/finished to avoid cycles or redundant work
+	steps, _ := e.storage.GetExecutionSteps(ctx, exec.Namespace, exec.ID)
+	for _, s := range steps {
+		if s.NodeID == nodeID && (s.Status == models.TaskCompleted || s.Status == models.TaskSkipped || s.Status == models.TaskFailed) {
+			return
+		}
+	}
+
+	// 2. Mark as SKIPPED
+	step := &models.ExecutionStep{
+		ID:          uuid.New().String(),
+		Namespace:   exec.Namespace,
+		ExecutionID: exec.ID,
+		NodeID:      nodeID,
+		Status:      models.TaskSkipped,
+		StartedAt:   time.Now(),
+	}
+	now := time.Now()
+	step.FinishedAt = &now
+	e.storage.CreateExecutionStep(ctx, exec.Namespace, step)
+	e.logger.Debug("Skipping node", "node", nodeID, "execution", exec.ID)
+
+	// 3. Propagate to children
+	// A child should be skipped if ALL its predecessors are now SKIPPED.
+	// If it has at least one COMPLETED predecessor, it might be ready to RUN instead.
+	for _, edge := range g.Edges[nodeID] {
+		childID := edge.TargetID
+		
+		ready, _ := e.isNodeReady(ctx, childID, exec.Namespace, exec.ID, g)
+		if ready {
+			// Check if all predecessors are skipped
+			childSteps, _ := e.storage.GetExecutionSteps(ctx, exec.Namespace, exec.ID)
+			allSkipped := true
+			// Find all predecessors of childID
+			preds := []string{}
+			for src, edgs := range g.Edges {
+				for _, edg := range edgs {
+					if edg.TargetID == childID {
+						preds = append(preds, src)
+					}
+				}
+			}
+			
+			for _, p := range preds {
+				found := false
+				for _, cs := range childSteps {
+					if cs.NodeID == p {
+						if cs.Status != models.TaskSkipped {
+							allSkipped = false
+						}
+						found = true
+						break
+					}
+				}
+				if !found || !allSkipped {
+					allSkipped = false
+					break
+				}
+			}
+
+			if allSkipped {
+				e.skipNode(ctx, exec, g, childID)
+			} else {
+				// At least one is COMPLETED! Start the node.
+				newStep := &models.ExecutionStep{
+					ID:          uuid.New().String(),
+					Namespace:   exec.Namespace,
+					ExecutionID: exec.ID,
+					NodeID:      childID,
+					Status:      models.TaskPending,
+					Input:       "", // Or merge inputs?
+					StartedAt:   time.Now(),
+				}
+				e.storage.CreateExecutionStep(ctx, exec.Namespace, newStep)
+			}
+		}
+	}
+}
+
+// ReapTimeouts checks for WAITING steps that have passed their timeout period
+func (e *Engine) ReapTimeouts(ctx context.Context, namespace string) error {
+	// For simplicity in this version, we list all executions and their steps.
+	// In production, we would use a more efficient query or a TTL index in Redis.
+	execs, err := e.storage.ListExecutions(ctx, namespace)
+	if err != nil {
+		return err
+	}
+
+	for _, exec := range execs {
+		if exec.Status != models.TaskRunning {
+			continue
+		}
+		steps, err := e.storage.GetExecutionSteps(ctx, namespace, exec.ID)
+		if err != nil {
+			continue
+		}
+		for _, step := range steps {
+			if step.Status == models.TaskWaiting {
+				// Get node config to find timeout
+				wf, _ := e.storage.GetWorkflow(ctx, namespace, exec.WorkflowID)
+				for _, n := range wf.Nodes {
+					if n.ID == step.NodeID {
+						if timeoutStr, ok := n.Config["timeout"].(string); ok {
+							timeout, err := time.ParseDuration(timeoutStr)
+							if err == nil && time.Since(step.UpdatedAt) > timeout {
+								e.logger.Warn("Step timed out waiting for signal", "step", step.ID, "node", step.NodeID)
+								step.Status = models.TaskFailed
+								step.Error = "SIGNAL_TIMEOUT"
+								now := time.Now()
+								step.FinishedAt = &now
+								e.storage.UpdateExecutionStep(ctx, namespace, step)
+								e.checkAndFinishExecution(ctx, exec)
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+	return nil
+}
+
 func (e *Engine) GetExecutionStatus(ctx context.Context, namespace string, execID string) (*models.Execution, error) {
 	return e.storage.GetExecution(ctx, namespace, execID)
 }
@@ -228,7 +367,7 @@ func (e *Engine) isNodeReady(ctx context.Context, nodeID string, namespace strin
 
 	completedNodes := make(map[string]bool)
 	for _, s := range steps {
-		if s.Status == models.TaskCompleted {
+		if s.Status == models.TaskCompleted || s.Status == models.TaskSkipped {
 			completedNodes[s.NodeID] = true
 		}
 	}
@@ -269,9 +408,11 @@ func (e *Engine) checkAndFinishExecution(ctx context.Context, exec *models.Execu
 		if hasFailure {
 			exec.Status = models.TaskFailed
 			exec.ErrorMessage = firstError
+			e.logger.Info("Execution failed", "execution", exec.ID, "error", firstError)
 		} else {
 			exec.Status = models.TaskCompleted
 			exec.Output = finalOutput
+			e.logger.Info("Execution completed", "execution", exec.ID)
 		}
 		now := time.Now()
 		exec.FinishedAt = &now

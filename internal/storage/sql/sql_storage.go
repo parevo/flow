@@ -206,14 +206,15 @@ func (s *SQLStorage) CreateExecutionStep(ctx context.Context, namespace string, 
 		input = encryptedInput
 	}
 
-	query := `INSERT INTO execution_steps (id, namespace, execution_id, node_id, status, input, scheduled_at, started_at)
-			  VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+	query := `INSERT INTO execution_steps (id, namespace, execution_id, node_id, status, input, scheduled_at, started_at, updated_at)
+			  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
 	if _, ok := s.dialect.(PostgresDialect); ok {
-		query = `INSERT INTO execution_steps (id, namespace, execution_id, node_id, status, input, scheduled_at, started_at)
-				  VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`
+		query = `INSERT INTO execution_steps (id, namespace, execution_id, node_id, status, input, scheduled_at, started_at, updated_at)
+				  VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`
 	}
+	now := time.Now()
 	_, err := s.db.ExecContext(ctx, query,
-		step.ID, step.Namespace, step.ExecutionID, step.NodeID, step.Status, input, step.ScheduledAt, step.StartedAt)
+		step.ID, step.Namespace, step.ExecutionID, step.NodeID, step.Status, input, step.ScheduledAt, step.StartedAt, now)
 	return err
 }
 
@@ -227,12 +228,12 @@ func (s *SQLStorage) UpdateExecutionStep(ctx context.Context, namespace string, 
 		errStr = eError
 	}
 
-	query := `UPDATE execution_steps SET status = ?, output = ?, error = ?, finished_at = ?, attempt_number = ?, scheduled_at = ? WHERE id = ? AND namespace = ?`
+	query := `UPDATE execution_steps SET status = ?, output = ?, error = ?, finished_at = ?, attempt_number = ?, scheduled_at = ?, updated_at = ? WHERE id = ? AND namespace = ?`
 	if _, ok := s.dialect.(PostgresDialect); ok {
-		query = `UPDATE execution_steps SET status = $1, output = $2, error = $3, finished_at = $4, attempt_number = $5, scheduled_at = $6 WHERE id = $7 AND namespace = $8`
+		query = `UPDATE execution_steps SET status = $1, output = $2, error = $3, finished_at = $4, attempt_number = $5, scheduled_at = $6, updated_at = $7 WHERE id = $8 AND namespace = $9`
 	}
 	_, err := s.db.ExecContext(ctx, query,
-		step.Status, output, errStr, step.FinishedAt, step.AttemptNumber, step.ScheduledAt, step.ID, namespace)
+		step.Status, output, errStr, step.FinishedAt, step.AttemptNumber, step.ScheduledAt, time.Now(), step.ID, namespace)
 	return err
 }
 

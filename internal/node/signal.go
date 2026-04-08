@@ -20,6 +20,10 @@ func (s *SignalNode) Execute(ctx context.Context, config map[string]interface{},
 }
 
 func (s *SignalNode) Validate(config map[string]interface{}) error {
-	// SignalNode might not need specific config, but could have a 'timeout' in the future.
+	if t, ok := config["timeout"]; ok {
+		if _, ok := t.(string); !ok {
+			return fmt.Errorf("timeout must be a duration string, e.g., '1h'")
+		}
+	}
 	return nil
 }
