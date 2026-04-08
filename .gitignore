@@ -4,3 +4,11 @@ coverage.out
 coverage.html
 benchmark.txt
 *.test
+
+# Binaries
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+visual_builder
