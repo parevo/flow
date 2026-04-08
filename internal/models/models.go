@@ -38,13 +38,23 @@ type Workflow struct {
 	UpdatedAt   time.Time         `json:"updatedAt" db:"updated_at"`
 }
 
+// RetryPolicy defines how a node should be retried on failure
+type RetryPolicy struct {
+	MaxAttempts       int           `json:"maxAttempts"`       // Maximum number of retries
+	InitialInterval   time.Duration `json:"initialInterval"`   // First retry delay
+	BackoffCoefficient float64       `json:"backoffCoefficient"` // Multiplier for each subsequent retry
+	MaximumInterval   time.Duration `json:"maximumInterval"`   // Max delay cap
+}
+
 // Node represents a single step in a workflow
 type Node struct {
 	ID         string                 `json:"id"`
 	Type       string                 `json:"type"` // e.g., "http", "script", "delay"
 	Name       string                 `json:"name"`
-	Config     map[string]interface{} `json:"config"`
-	RetryCount int                    `json:"retryCount"`
+	Config           map[string]interface{} `json:"config"`
+	RetryCount       int                    `json:"retryCount"` // Deprecated, use RetryPolicy
+	RetryPolicy      *RetryPolicy           `json:"retryPolicy,omitempty"`
+	CompensateNodeID string                 `json:"compensateNodeId,omitempty"` // Saga pattern: Node to run on failure
 }
 
 // Edge represents a connection between two nodes
