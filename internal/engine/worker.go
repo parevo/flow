@@ -37,7 +37,7 @@ func (w *Worker) Start(ctx context.Context) {
 	w.engine.logger.Info("Worker started", "id", w.id, "namespace", w.namespace)
 	GetTelemetry().WorkerStarted(w.id)
 	defer GetTelemetry().WorkerStopped(w.id)
-	
+
 	ticker := time.NewTicker(w.interval)
 	defer ticker.Stop()
 
@@ -86,7 +86,7 @@ func (w *Worker) processOne(ctx context.Context) {
 	start := time.Now()
 	output, err := w.executeStep(ctx, step)
 	duration := time.Since(start)
-	
+
 	// Determine node type for metrics
 	nodeType := "unknown"
 	wf, _ := w.engine.storage.GetWorkflow(ctx, step.Namespace, exec.WorkflowID)
@@ -108,19 +108,19 @@ func (w *Worker) processOne(ctx context.Context) {
 		}
 
 		w.engine.logger.Error("Step execution failed", "worker", w.id, "step", step.ID, "attempt", step.AttemptNumber, "error", err)
-		
+
 		// Dynamic Retry Policy
 		policy := w.getRetryPolicy(wf, step.NodeID)
 
 		if step.AttemptNumber < policy.MaxAttempts {
 			step.AttemptNumber++
 			delay := w.calculateBackoff(policy, step.AttemptNumber)
-			
+
 			nextScheduled := time.Now().Add(delay)
 			step.ScheduledAt = &nextScheduled
 			step.Status = models.TaskPending
 			step.Error = err.Error()
-			
+
 			w.engine.logger.Info("Rescheduling step with dynamic backoff", "worker", w.id, "step", step.ID, "next_run", nextScheduled.Format(time.RFC3339))
 			GetTelemetry().IncProcessed(step.Namespace, nodeType, "retried")
 			w.engine.storage.UpdateExecutionStep(ctx, step.Namespace, step)
@@ -135,9 +135,12 @@ func (w *Worker) processOne(ctx context.Context) {
 		GetTelemetry().IncProcessed(step.Namespace, nodeType, "failed")
 		GetTelemetry().ObserveDuration(step.Namespace, nodeType, duration)
 		w.engine.storage.UpdateExecutionStep(ctx, step.Namespace, step)
-		
-		w.engine.checkAndFinishExecution(ctx, exec)
-		w.handleCompensation(ctx, wf, step, exec, err)
+
+		// Check if compensation exists - if yes, don't fail execution yet
+		hasCompensation := w.handleCompensation(ctx, wf, step, exec, err)
+		if !hasCompensation {
+			w.engine.checkAndFinishExecution(ctx, exec)
+		}
 		return
 	}
 
@@ -176,7 +179,7 @@ func (w *Worker) calculateBackoff(policy *models.RetryPolicy, attempt int) time.
 	return delay
 }
 
-func (w *Worker) handleCompensation(ctx context.Context, wf *models.Workflow, step *models.ExecutionStep, exec *models.Execution, err error) {
+func (w *Worker) handleCompensation(ctx context.Context, wf *models.Workflow, step *models.ExecutionStep, exec *models.Execution, err error) bool {
 	for _, n := range wf.Nodes {
 		if n.ID == step.NodeID && n.CompensateNodeID != "" {
 			w.engine.logger.Info("Triggering Saga Compensation", "execution", exec.ID, "failed_node", n.ID, "compensation_node", n.CompensateNodeID)
@@ -190,9 +193,10 @@ func (w *Worker) handleCompensation(ctx context.Context, wf *models.Workflow, st
 				StartedAt:   time.Now(),
 			}
 			w.engine.storage.CreateExecutionStep(ctx, step.Namespace, compStep)
-			break
+			return true // Compensation exists, don't fail execution yet
 		}
 	}
+	return false // No compensation found
 }
 
 func (w *Worker) executeStep(ctx context.Context, step *models.ExecutionStep) (string, error) {

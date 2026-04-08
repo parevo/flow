@@ -239,6 +239,15 @@ func (e *Engine) SignalExecution(ctx context.Context, namespace string, execID s
 
 // mergeSignalData combines existing input with signal data for downstream nodes
 func (e *Engine) mergeSignalData(existingInput string, signalData string) string {
+	// Try to parse signal data as JSON
+	var signalMap map[string]interface{}
+	signalErr := json.Unmarshal([]byte(signalData), &signalMap)
+
+	// If signal data is not valid JSON or is empty, return it as-is for backwards compatibility
+	if signalErr != nil || len(signalMap) == 0 {
+		return signalData
+	}
+
 	// Parse existing input
 	var inputMap map[string]interface{}
 	if existingInput != "" {
@@ -246,15 +255,6 @@ func (e *Engine) mergeSignalData(existingInput string, signalData string) string
 	}
 	if inputMap == nil {
 		inputMap = make(map[string]interface{})
-	}
-
-	// Parse signal data
-	var signalMap map[string]interface{}
-	if signalData != "" {
-		_ = json.Unmarshal([]byte(signalData), &signalMap)
-	}
-	if signalMap == nil {
-		signalMap = make(map[string]interface{})
 	}
 
 	// Merge: signal data overwrites existing keys
