@@ -1,108 +1,69 @@
-# Parevo Flow 🚀
+# Parevo Flow 🌌🚀
 
-[![CI](https://github.com/parevo/flow/actions/workflows/ci.yml/badge.svg)](https://github.com/parevo/flow/actions/workflows/ci.yml)
-[![Go Report Card](https://goreportcard.com/badge/github.com/parevo/flow)](https://goreportcard.com/report/github.com/parevo/flow)
-[![MIT License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Go Doc](https://img.shields.io/badge/godoc-reference-blue.svg)](https://pkg.go.dev/github.com/parevo/flow)
+**A Lightweight, High-Performance, and Intelligent Workflow Engine in Go.**
 
-**Parevo Flow** is a high-performance, developer-friendly, and durable graph-based workflow engine for Go. Designed as a lightweight and explicit alternative to Temporal, it empowers SaaS developers to build complex, long-running automations with 100% state persistence and agnostic multi-tenancy.
+Parevo Flow is designed for modern SaaS architectures that require **extreme flexibility, enterprise-grade security, and intelligent decision-making** without the overhead of heavy infrastructure.
 
 ---
 
-## 🌟 Why Parevo Flow?
+## 🌟 Masterpiece Features
 
-- **Explicit State Traversal**: No complex "event-sourcing" or "replay" logic. Every step's input/output is persisted in your database. debugging is trivial.
-- **n8n-style Flexibility**: Define workflows as Directed Acyclic Graphs (DAGs) using JSON. Visual-ready architecture.
-- **Agnostic Multi-tenancy**: Built-in `Namespace` and `Labeling` support. Works with any SaaS structure (`TenantID`, `UserID`, `ProjectID`).
-- **Persistence Anywhere**: Native support for **MySQL 8.0+** and **PostgreSQL**. Uses `SKIP LOCKED` for high-concurrency worker polling.
-- **Durable by Design**: If your worker crashes, it resumes exactly where it left off. No data loss.
+- **🧠 Intelligent Routing**: Built-in `ConditionNode` support for complex If-Else branching and decision trees.
+- **🛡️ Enterprise Security**: Optional **AES-256-GCM** encryption for all sensitive workflow data (PII protection).
+- **⚡ Webhook Automation**: Trigger any workflow via HTTP POST requests using the integrated Webhook Layer.
+- **💎 Architectural Purity**: Isolated `internal` logic with a centralized `tests/` directory for maximum maintainability.
+- **🚀 High-Load Ready**: Optimized with `SKIP LOCKED` polling, exponential backoff retries, and database connection pool tuning.
+- **🌍 Multi-Tenant Isolation**: Agnostic `Namespace` and `Labels` system for ultimate SaaS scalability.
+- **🔌 Multi-DB Support**: Native support for **MySQL** and **PostgreSQL**.
 
 ---
 
-## 🏗️ Architecture
+## 📁 Directory Structure
 
-```mermaid
-graph TD
-    User([User/API]) -->|Trigger| Engine[Engine]
-    Engine -->|Persist| DB[(Database: MySQL/Postgres)]
-    DB <-->|Poll/Claim| Worker[Worker Loop]
-    Worker -->|Execute| Nodes[Node Registry]
-    Nodes -->|Log/HTTP/Wait| Ext[External Services]
-    Worker -->|Complete| Engine
+```text
+.
+├── internal/
+│   ├── engine/       # Core DAG and Orchestration Beyni
+│   ├── storage/      # Persistence, SQL Drivers & AES-Crypto
+│   ├── node/         # Pre-built Nodes (Log, HTTP, Wait, Condition)
+│   └── trigger/      # Automation Triggers (Webhook Layer)
+├── tests/            # Unified quality gate (Integration & Smoke Tests)
+├── LICENSE           # MIT
+└── README.md         # This masterpiece
 ```
 
 ---
 
-## 🚀 Quick Start (60 Seconds)
+## 🚀 Quick Start
 
-### 1. Define your Workflow (JSON)
-```json
-{
-  "id": "onboarding",
-  "name": "User Onboarding",
-  "nodes": [
-    { "id": "n1", "type": "log", "config": { "message": "Welcome!" } },
-    { "id": "n2", "type": "wait", "config": { "duration": "24h" } },
-    { "id": "n3", "type": "http", "config": { "url": "https://api.saas.com/nudge" } }
-  ],
-  "edges": [
-    { "sourceId": "n1", "targetId": "n2" },
-    { "sourceId": "n2", "targetId": "n3" }
-  ]
-}
-```
-
-### 2. Run with Go
-```go
-package main
-
-import (
-    "parevo-lab/flow/internal/engine"
-    "parevo-lab/flow/internal/storage/sql"
-)
-
-func main() {
-    // 1. Connect to DB
-    db, _ := sqlx.Connect("mysql", dsn)
-    store, _ := sql.NewSQLStorage(db, "mysql")
-
-    // 2. Initialize Engine
-    eng := engine.NewEngine(store, registry)
-
-    // 3. Start Workflow
-    execID, _ := eng.StartWorkflow(ctx, "my-tenant", "onboarding", `{"user_id": 123}`)
-    
-    // 4. Start Workers
-    worker := engine.NewWorker("worker-1", eng, registry, time.Second)
-    worker.Start(ctx)
-}
-```
-
----
-
-## 🛠️ Features for SaaS Builders
-
-### Namespaces (Isolation)
-Every workflow and execution lives inside a `Namespace`.
-```go
-// Isolated execution for Customer A
-eng.StartWorkflow(ctx, "customer-a", "invoice-flow", input)
-```
-
-### Labels (Grouping)
-Attach arbitrary data to workflows or executions for filtering.
-```json
-"labels": {
-  "priority": "high",
-  "department": "finance"
-}
-```
-
----
-
-## 📦 Installation
+### 1. Installation
 ```bash
 go get github.com/parevo/flow
+```
+
+### 2. Basic Workflow with Decision Logic
+```go
+wf := &models.Workflow{
+    ID: "onboarding-wf",
+    Nodes: []models.Node{
+        {ID: "check", Type: "condition", Config: map[string]interface{}{
+            "variable": "is_vip", "operator": "==", "value": true,
+        }},
+        {ID: "vip-welcome", Type: "log", Config: map[string]interface{}{"message": "Welcome VIP!"}},
+        {ID: "std-welcome", Type: "log", Config: map[string]interface{}{"message": "Welcome standard user."}},
+    },
+    Edges: []models.Edge{
+        {SourceID: "check", TargetID: "vip-welcome", Condition: "true"},
+        {SourceID: "check", TargetID: "std-welcome", Condition: "false"},
+    },
+}
+```
+
+### 3. Enabling Enterprise Security (AES-256)
+Protect your data-at-rest with a single line of code:
+```go
+crypto, _ := storage.NewCrypto("64-char-hex-encryption-key...")
+storage.SetEncryption(crypto) // All Input/Output data will be AES-256-GCM secured!
 ```
 
 ---
@@ -117,11 +78,13 @@ db.SetMaxIdleConns(25)
 db.SetConnMaxLifetime(5 * time.Minute)
 ```
 
+---
+
 ## 🤝 Contributing
-Contributions are welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for details.
+Contributions are welcome! Parevo Flow is community-driven and open to new nodes and triggers.
 
 ## 📄 License
-This project is licensed under the **MIT License** - see the [LICENSE](LICENSE) file for details.
+Distributed under the **MIT License**. See `LICENSE` for more information.
 
 ---
-Built with ❤️ by **Parevo Lab**.
+**Parevo Flow** - *Built with ❤️ for the Gopher community by Ahmet Can Bilgay.*

@@ -96,8 +96,8 @@ func (e *Engine) CompleteStep(ctx context.Context, step *models.ExecutionStep, o
 		return err
 	}
 
-	// Find next nodes
-	nextNodes := g.GetNextNodes(step.NodeID)
+	// Find next nodes with branch-aware routing
+	nextNodes := g.GetNextNodesWithBranch(step.NodeID, output)
 	if len(nextNodes) == 0 {
 		return e.checkAndFinishExecution(ctx, exec)
 	}
@@ -129,9 +129,9 @@ func (e *Engine) CompleteStep(ctx context.Context, step *models.ExecutionStep, o
 
 func (e *Engine) isNodeReady(ctx context.Context, nodeID string, namespace string, execID string, g *Graph) (bool, error) {
 	predecessors := []string{}
-	for source, targets := range g.Edges {
-		for _, t := range targets {
-			if t == nodeID {
+	for source, edges := range g.Edges {
+		for _, e := range edges {
+			if e.TargetID == nodeID {
 				predecessors = append(predecessors, source)
 			}
 		}

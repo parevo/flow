@@ -9,6 +9,7 @@ import (
 
 	"github.com/jmoiron/sqlx"
 	"github.com/parevo/flow/internal/models"
+	"github.com/parevo/flow/internal/storage"
 )
 
 type Dialect interface {
@@ -33,6 +34,7 @@ func (d PostgresDialect) SkipLocked(query string) string {
 type SQLStorage struct {
 	db      *sqlx.DB
 	dialect Dialect
+	crypto  *storage.Crypto // Optional encryption
 }
 
 func NewSQLStorage(db *sqlx.DB, dialectName string) (*SQLStorage, error) {
@@ -46,6 +48,10 @@ func NewSQLStorage(db *sqlx.DB, dialectName string) (*SQLStorage, error) {
 		return nil, fmt.Errorf("unsupported dialect: %s", dialectName)
 	}
 	return &SQLStorage{db: db, dialect: dialect}, nil
+}
+
+func (s *SQLStorage) SetEncryption(crypto *storage.Crypto) {
+	s.crypto = crypto
 }
 
 func (s *SQLStorage) SaveWorkflow(ctx context.Context, namespace string, wf *models.Workflow) error {
@@ -110,6 +116,15 @@ func (s *SQLStorage) ListWorkflows(ctx context.Context, namespace string) ([]*mo
 
 func (s *SQLStorage) CreateExecution(ctx context.Context, namespace string, exec *models.Execution) error {
 	exec.Namespace = namespace
+	input := exec.Input
+	if s.crypto != nil {
+		encryptedInput, err := s.crypto.Encrypt(input)
+		if err != nil {
+			return err
+		}
+		input = encryptedInput
+	}
+
 	query := `INSERT INTO executions (id, namespace, workflow_id, version, status, input, started_at)
 			  VALUES (?, ?, ?, ?, ?, ?, ?)`
 	if _, ok := s.dialect.(PostgresDialect); ok {
@@ -118,7 +133,7 @@ func (s *SQLStorage) CreateExecution(ctx context.Context, namespace string, exec
 	}
 
 	_, err := s.db.ExecContext(ctx, query,
-		exec.ID, exec.Namespace, exec.WorkflowID, exec.Version, exec.Status, exec.Input, exec.StartedAt)
+		exec.ID, exec.Namespace, exec.WorkflowID, exec.Version, exec.Status, input, exec.StartedAt)
 	return err
 }
 
@@ -129,22 +144,45 @@ func (s *SQLStorage) GetExecution(ctx context.Context, namespace string, id stri
 	}
 	var exec models.Execution
 	err := s.db.GetContext(ctx, &exec, query, id, namespace)
-	return &exec, err
+	if err != nil {
+		return nil, err
+	}
+
+	if s.crypto != nil {
+		decryptedInput, _ := s.crypto.Decrypt(exec.Input)
+		exec.Input = decryptedInput
+		decryptedOutput, _ := s.crypto.Decrypt(exec.Output)
+		exec.Output = decryptedOutput
+	}
+
+	return &exec, nil
 }
 
 func (s *SQLStorage) UpdateExecution(ctx context.Context, namespace string, exec *models.Execution) error {
+	output := exec.Output
+	if s.crypto != nil {
+		encryptedOutput, _ := s.crypto.Encrypt(output)
+		output = encryptedOutput
+	}
+
 	query := `UPDATE executions SET status = ?, output = ?, error_message = ?, finished_at = ? WHERE id = ? AND namespace = ?`
 	if _, ok := s.dialect.(PostgresDialect); ok {
 		query = `UPDATE executions SET status = $1, output = $2, error_message = $3, finished_at = $4 WHERE id = $5 AND namespace = $6`
 	}
 
 	_, err := s.db.ExecContext(ctx, query,
-		exec.Status, exec.Output, exec.ErrorMessage, exec.FinishedAt, exec.ID, namespace)
+		exec.Status, output, exec.ErrorMessage, exec.FinishedAt, exec.ID, namespace)
 	return err
 }
 
 func (s *SQLStorage) CreateExecutionStep(ctx context.Context, namespace string, step *models.ExecutionStep) error {
 	step.Namespace = namespace
+	input := step.Input
+	if s.crypto != nil {
+		encryptedInput, _ := s.crypto.Encrypt(input)
+		input = encryptedInput
+	}
+
 	query := `INSERT INTO execution_steps (id, namespace, execution_id, node_id, status, input, scheduled_at, started_at)
 			  VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
 	if _, ok := s.dialect.(PostgresDialect); ok {
@@ -152,17 +190,26 @@ func (s *SQLStorage) CreateExecutionStep(ctx context.Context, namespace string, 
 				  VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`
 	}
 	_, err := s.db.ExecContext(ctx, query,
-		step.ID, step.Namespace, step.ExecutionID, step.NodeID, step.Status, step.Input, step.ScheduledAt, step.StartedAt)
+		step.ID, step.Namespace, step.ExecutionID, step.NodeID, step.Status, input, step.ScheduledAt, step.StartedAt)
 	return err
 }
 
 func (s *SQLStorage) UpdateExecutionStep(ctx context.Context, namespace string, step *models.ExecutionStep) error {
+	output := step.Output
+	errStr := step.Error
+	if s.crypto != nil {
+		eOutput, _ := s.crypto.Encrypt(output)
+		output = eOutput
+		eError, _ := s.crypto.Encrypt(errStr)
+		errStr = eError
+	}
+
 	query := `UPDATE execution_steps SET status = ?, output = ?, error = ?, finished_at = ?, attempt_number = ?, scheduled_at = ? WHERE id = ? AND namespace = ?`
 	if _, ok := s.dialect.(PostgresDialect); ok {
 		query = `UPDATE execution_steps SET status = $1, output = $2, error = $3, finished_at = $4, attempt_number = $5, scheduled_at = $6 WHERE id = $7 AND namespace = $8`
 	}
 	_, err := s.db.ExecContext(ctx, query,
-		step.Status, step.Output, step.Error, step.FinishedAt, step.AttemptNumber, step.ScheduledAt, step.ID, namespace)
+		step.Status, output, errStr, step.FinishedAt, step.AttemptNumber, step.ScheduledAt, step.ID, namespace)
 	return err
 }
 
@@ -173,6 +220,21 @@ func (s *SQLStorage) GetExecutionSteps(ctx context.Context, namespace string, ex
 	}
 	var steps []*models.ExecutionStep
 	err := s.db.SelectContext(ctx, &steps, query, executionID, namespace)
+	if err != nil {
+		return nil, err
+	}
+
+	if s.crypto != nil {
+		for _, step := range steps {
+			dInput, _ := s.crypto.Decrypt(step.Input)
+			step.Input = dInput
+			dOutput, _ := s.crypto.Decrypt(step.Output)
+			step.Output = dOutput
+			dError, _ := s.crypto.Decrypt(step.Error)
+			step.Error = dError
+		}
+	}
+
 	return steps, err
 }
 
