@@ -311,19 +311,25 @@ func (e *Engine) ReapTimeouts(ctx context.Context, namespace string) error {
 		for _, step := range steps {
 			if step.Status == models.TaskWaiting {
 				// Get node config to find timeout
-				wf, _ := e.storage.GetWorkflow(ctx, namespace, exec.WorkflowID)
+				wf, err := e.storage.GetWorkflow(ctx, namespace, exec.WorkflowID)
+				if err != nil {
+					e.logger.Error("Failed to get workflow for reaper", "workflow", exec.WorkflowID, "error", err)
+					continue
+				}
 				for _, n := range wf.Nodes {
 					if n.ID == step.NodeID {
 						if timeoutStr, ok := n.Config["timeout"].(string); ok {
 							timeout, err := time.ParseDuration(timeoutStr)
-							if err == nil && time.Since(step.UpdatedAt) > timeout {
-								e.logger.Warn("Step timed out waiting for signal", "step", step.ID, "node", step.NodeID)
-								step.Status = models.TaskFailed
-								step.Error = "SIGNAL_TIMEOUT"
-								now := time.Now()
-								step.FinishedAt = &now
-								e.storage.UpdateExecutionStep(ctx, namespace, step)
-								e.checkAndFinishExecution(ctx, exec)
+							if err == nil {
+								if time.Since(step.UpdatedAt) > timeout {
+									e.logger.Warn("Step timed out waiting for signal", "step", step.ID, "node", step.NodeID)
+									step.Status = models.TaskFailed
+									step.Error = "SIGNAL_TIMEOUT"
+									now := time.Now()
+									step.FinishedAt = &now
+									e.storage.UpdateExecutionStep(ctx, namespace, step)
+									e.checkAndFinishExecution(ctx, exec)
+								}
 							}
 						}
 					}

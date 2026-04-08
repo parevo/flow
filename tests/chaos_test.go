@@ -12,7 +12,10 @@ import (
 	"github.com/parevo/flow/internal/storage/memory"
 )
 
-func TestChaosResilience(t *testing.T) {
+func TestFaultToleranceAndResilience(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping fault tolerance and resilience test in short mode")
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 

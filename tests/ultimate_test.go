@@ -11,7 +11,10 @@ import (
 	"github.com/parevo/flow/internal/storage/memory"
 )
 
-func TestUltimateComplexWorkflow(t *testing.T) {
+func TestEnterpriseEndToEndWorkflow(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping complex end-to-end workflow test in short mode")
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 40*time.Second)
 	defer cancel()
 
