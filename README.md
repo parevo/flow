@@ -101,15 +101,48 @@ A clean, modular structure following Go best practices:
 
 ---
 
-## 🥇 Comparison vs. Temporal
+## 🥇 The Great Face-Off: Parevo Flow vs. The Giants
 
-| Feature | Temporal | Parevo Flow |
-| :--- | :--- | :--- |
-| **Footprint** | Heavy (Needs DB, K8s, Services) | **Ultra-Light (Single Binary / Library)** |
-| **Observability** | External Dashboard | **Built-in Slog + Mermaid + Metrics** |
-| **Logic Core** | Event Sourcing / Replay | **DB/Redis State Persistence** |
-| **Simplicity** | High Learning Curve | **Go-Native & Minimalist** |
-| **Self-Healing** | Standard | **Advanced Zombie Recovery** |
+### ⚔️ Feature-by-Feature Comparison
+
+| Feature | **Temporal / Cadence** | **Parevo Flow** 🌌 | **Parevo's Solution** |
+| :--- | :--- | :--- | :--- |
+| **Logic Durability** | Event Sourcing & Replay | **State Reconciliation** | We store exact step results. No need for complex "code re-running" logic. |
+| **Scalability** | Heavy Cassandra/ES Cluster | **Redis Sorted Sets** | We use Redis primitives for sub-millisecond task claiming and scaling. |
+| **High Load** | High RPC Overhead | **SKIP LOCKED (SQL)** | Distributed task locking is handled natively by the DB. No extra infra. |
+| **Observability** | External Service + UI | **Internal sLog + Metrics** | Zero-dependency metrics & logs are baked into the binary. |
+| **Human Approvals** | Native Signals | **SignalNode & API** | Simple `WAITING` state resumed by a single POST request. |
+| **Binary Size** | ~100MB+ (Total Infra) | **~2MB (Single Lib)** | Everything is compiled into your own application's binary. |
+| **Learning Curve** | Weeks / Months | **Minutes / Hours** | If you know Go, you know Parevo Flow. No BPMN or complex DSLs. |
+
+---
+
+## 🏛️ "They have it, how about us?" - Deep Dive
+
+#### 🌀 1. Durable Execution & Replay
+- **Temporal**: Reaches state by re-running code from start to finish (Replay). Non-deterministic code (e.g., `time.Now()`) can break the entire system.
+- **Parevo Flow**: We use **"Direct State Persistence"**. The moment a step completes, the result is sealed in the DB. Code doesn't need to be deterministic; what you wrote is what runs, and we protect the result.
+
+#### 🚦 2. Signals & Interactivity
+- **Temporal**: Has a complex Signal/Query API.
+- **Parevo Flow**: We solved this with the **`SignalNode`**. We pause the workflow at any point and put it to sleep until an external "click" (Slack, Web, Email) arrives. It's simple and error-free.
+
+#### 🧟 3. Fault Tolerance
+- **Temporal**: Manages via heavy matching services and heartbeats.
+- **Parevo Flow**: We solved this with **"Zombie Task Recovery"** (Visibility Timeout). A worker crashed? The task is automatically handed over to another worker after 5 minutes.
+
+#### 📈 4. Visualization
+- **Temporal**: Requires setting up a separate Web UI project.
+- **Parevo Flow**: We provide Mermaid.js output via the **`Visualise()`** method. We generate visual diagrams instantly anywhere that supports Markdown (GitHub, Notion, etc.). There is zero extra server load.
+
+---
+
+## 🎯 The "Sweet Spot" for Parevo Flow
+Parevo Flow is specifically designed for modern **SaaS, Fintech, and high-concurrency Microservices** where:
+1. You need to handle **thousands of executions per second**.
+2. You want to **embed** the engine directly into your Go binary.
+3. You demand **self-healing** without the complexity of Event Sourcing.
+4. You require **AES-256 encryption** for sensitive at-rest data natively.
 
 ---
 
