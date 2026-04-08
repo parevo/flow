@@ -18,8 +18,31 @@ Parevo Flow is an enterprise-grade DAG orchestration engine designed for modern 
 - **🏗️ Fluent Go Builder**: A type-safe, chainable DSL to build complex workflows directly in Go.
 - **📈 Native Observability**: **Zero-dependency Prometheus metrics** and **Structured JSON Logging (slog)**.
 - **⚡ High-Load Performance**: Optimized SQL with **Composite Indexes** and `SKIP LOCKED` concurrency.
+- **📊 Native Visualization**: Instantly generate **Mermaid.js** diagrams from your Go code for documentation.
 
 ---
+
+## 📊 Workflow Visualization
+
+Parevo Flow can visualize your complex logic as professional diagrams. Just build and call `.Visualise()`:
+
+```go
+wf := builder.NewWorkflow("signup", "User Signup")...
+fmt.Println(wf.Visualise())
+```
+
+**Output (Mermaid.js):**
+```mermaid
+flowchart TD
+    validate[Validate User]
+    check-status{Is Valid?}
+    welcome-email[Send Welcome]
+    
+    validate --> check-status
+    check-status -- true --> welcome-email
+```
+> [!TIP]
+> You can paste the output into GitHub, Notion, or [Mermaid Live Editor](https://mermaid.live) to see your workflow graph!
 
 ## 🏗️ Fluent Builder Example
 

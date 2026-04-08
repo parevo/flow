@@ -110,3 +110,7 @@ func (b *WorkflowBuilder) ConnectIf(sourceID, targetID string, condition string)
 func (b *WorkflowBuilder) Build() *models.Workflow {
 	return b.workflow
 }
+
+func (b *WorkflowBuilder) Visualise() string {
+	return ToMermaid(b.workflow)
+}
