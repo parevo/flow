@@ -62,6 +62,17 @@ func (w *Worker) processOne(ctx context.Context) {
 		return // No work
 	}
 
+	// Safety Check: If parent execution is cancelled, skip this step
+	exec, err := w.engine.storage.GetExecution(ctx, step.Namespace, step.ExecutionID)
+	if err == nil && exec.Status == models.TaskCancelled {
+		log.Printf("Worker %s: step %s skipped because execution %s is CANCELLED\n", w.id, step.ID, exec.ID)
+		step.Status = models.TaskCancelled
+		now := time.Now()
+		step.FinishedAt = &now
+		w.engine.storage.UpdateExecutionStep(ctx, step.Namespace, step)
+		return
+	}
+
 	GetTelemetry().IncProcessed()
 	log.Printf("Worker %s: processing step %s (Namespace: %s, Node: %s)\n", w.id, step.ID, step.Namespace, step.NodeID)
 

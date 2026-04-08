@@ -20,6 +20,7 @@ const (
 	TaskFailed    TaskStatus = "FAILED"
 	TaskSkipped   TaskStatus = "SKIPPED"
 	TaskWaiting   TaskStatus = "WAITING"
+	TaskCancelled TaskStatus = "CANCELLED"
 )
 
 // Workflow represents the blueprint of a workflow
@@ -84,5 +85,6 @@ type ExecutionStep struct {
 	Labels        map[string]string `json:"labels" db:"-"`
 	ScheduledAt   *time.Time        `json:"scheduledAt,omitempty" db:"scheduled_at"`
 	StartedAt     time.Time         `json:"startedAt" db:"started_at"`
+	UpdatedAt     time.Time         `json:"updatedAt" db:"updated_at"`
 	FinishedAt    *time.Time        `json:"finishedAt,omitempty" db:"finished_at"`
 }

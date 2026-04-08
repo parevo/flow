@@ -245,25 +245,31 @@ func (s *SQLStorage) ClaimReadyStep(ctx context.Context, namespace string, worke
 	}
 	defer tx.Rollback()
 
-	query := "SELECT * FROM execution_steps WHERE status = 'PENDING' AND (scheduled_at IS NULL OR scheduled_at <= ?)"
-	args := []interface{}{time.Now()}
+	// Zombie Task Recovery Logic:
+	// A task is claimable if:
+	// 1. It's PENDING and scheduled_at is now or in the past.
+	// 2. It's RUNNING but hasn't been updated for more than 5 minutes (Zombie/Worker Dead).
+	
+	// MySQL Version
+	query := "SELECT * FROM execution_steps WHERE (status = 'PENDING' AND (scheduled_at IS NULL OR scheduled_at <= ?)) OR (status = 'RUNNING' AND updated_at <= ?)"
+	args := []interface{}{time.Now(), time.Now().Add(-5 * time.Minute)}
+	
 	if namespace != "" {
-		query = "SELECT * FROM execution_steps WHERE status = 'PENDING' AND (scheduled_at IS NULL OR scheduled_at <= ?) AND namespace = ?"
+		query = "SELECT * FROM execution_steps WHERE ((status = 'PENDING' AND (scheduled_at IS NULL OR scheduled_at <= ?)) OR (status = 'RUNNING' AND updated_at <= ?)) AND namespace = ?"
 		args = append(args, namespace)
 	}
-	query += " LIMIT 1"
-	query = s.dialect.SkipLocked(query)
-	
-	// Convert placeholders if Postgres
+
+	// Postgres Version
 	if _, ok := s.dialect.(PostgresDialect); ok {
 		if namespace != "" {
-			query = "SELECT * FROM execution_steps WHERE status = 'PENDING' AND (scheduled_at IS NULL OR scheduled_at <= $1) AND namespace = $2 LIMIT 1"
-			query = s.dialect.SkipLocked(query)
+			query = "SELECT * FROM execution_steps WHERE ((status = 'PENDING' AND (scheduled_at IS NULL OR scheduled_at <= $1)) OR (status = 'RUNNING' AND updated_at <= $2)) AND namespace = $3"
 		} else {
-			query = "SELECT * FROM execution_steps WHERE status = 'PENDING' AND (scheduled_at IS NULL OR scheduled_at <= $1) LIMIT 1"
-			query = s.dialect.SkipLocked(query)
+			query = "SELECT * FROM execution_steps WHERE (status = 'PENDING' AND (scheduled_at IS NULL OR scheduled_at <= $1)) OR (status = 'RUNNING' AND updated_at <= $2)"
 		}
 	}
+
+	query += " LIMIT 1"
+	query = s.dialect.SkipLocked(query)
 
 	var step models.ExecutionStep
 	err = tx.GetContext(ctx, &step, query, args...)

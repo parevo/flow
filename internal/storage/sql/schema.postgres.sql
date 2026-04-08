@@ -10,9 +10,10 @@ CREATE TABLE workflows (
     definition JSONB NOT NULL,
     labels JSONB,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    INDEX idx_workflows_namespace (namespace)
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE INDEX idx_workflows_namespace ON workflows(namespace);
 
 CREATE TABLE executions (
     id UUID PRIMARY KEY,
@@ -25,10 +26,11 @@ CREATE TABLE executions (
     labels JSONB,
     error_message TEXT,
     started_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    finished_at TIMESTAMP WITH TIME ZONE,
-    INDEX idx_executions_namespace_status (namespace, status),
-    INDEX idx_executions_workflow (workflow_id)
+    finished_at TIMESTAMP WITH TIME ZONE
 );
+
+CREATE INDEX idx_executions_namespace_status ON executions(namespace, status);
+CREATE INDEX idx_executions_workflow ON executions(workflow_id);
 
 CREATE TABLE execution_steps (
     id UUID PRIMARY KEY,
@@ -44,7 +46,22 @@ CREATE TABLE execution_steps (
     worker_id VARCHAR(255),
     scheduled_at TIMESTAMP WITH TIME ZONE,
     started_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    finished_at TIMESTAMP WITH TIME ZONE,
-    INDEX idx_steps_namespace_status_exec (namespace, status, execution_id),
-    INDEX idx_steps_worker (worker_id)
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    finished_at TIMESTAMP WITH TIME ZONE
 );
+
+CREATE INDEX idx_steps_namespace_status_sch ON execution_steps(namespace, status, scheduled_at);
+CREATE INDEX idx_steps_status_updated ON execution_steps(status, updated_at);
+CREATE INDEX idx_steps_execution_id ON execution_steps(execution_id);
+CREATE INDEX idx_steps_worker ON execution_steps(worker_id);
+
+-- Trigger for updated_at
+CREATE OR REPLACE FUNCTION update_updated_at_column()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = now();
+    RETURN NEW;
+END;
+$$ language 'plpgsql';
+
+CREATE TRIGGER update_execution_steps_updated_at BEFORE UPDATE ON execution_steps FOR EACH ROW EXECUTE PROCEDURE update_updated_at_column();

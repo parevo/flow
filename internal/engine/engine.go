@@ -127,6 +127,20 @@ func (e *Engine) CompleteStep(ctx context.Context, step *models.ExecutionStep, o
 	return nil
 }
 
+func (e *Engine) CancelExecution(ctx context.Context, namespace string, execID string) error {
+	exec, err := e.storage.GetExecution(ctx, namespace, execID)
+	if err != nil {
+		return err
+	}
+	if exec.Status == models.TaskCompleted || exec.Status == models.TaskFailed {
+		return fmt.Errorf("cannot cancel finished execution")
+	}
+	exec.Status = models.TaskCancelled
+	now := time.Now()
+	exec.FinishedAt = &now
+	return e.storage.UpdateExecution(ctx, namespace, exec)
+}
+
 func (e *Engine) GetExecutionStatus(ctx context.Context, namespace string, execID string) (*models.Execution, error) {
 	return e.storage.GetExecution(ctx, namespace, execID)
 }

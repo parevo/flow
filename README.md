@@ -2,26 +2,26 @@
 
 **A Lightweight, High-Performance, and Intelligent Workflow Engine in Go.**
 
-Parevo Flow is designed for modern SaaS architectures that require **extreme flexibility, enterprise-grade security, and intelligent decision-making** with **ZERO external dependencies** for observability.
+Parevo Flow is an enterprise-grade DAG orchestration engine designed for modern SaaS architectures. It combines **extreme flexibility, bulletproof reliability, and intelligent decision-making** with zero external dependencies for core observability.
 
 ---
 
-## 🌟 Masterpiece Features
+## 🌟 Gold Standard Features
 
-- **🧠 Intelligent Routing**: Built-in `ConditionNode` support for complex If-Else branching and decision trees.
-- **🛡️ Enterprise Security**: Optional **AES-256-GCM** encryption for all sensitive workflow data (PII protection).
+- **🧠 Intelligent Routing**: Built-in `ConditionNode` support for complex If-Else branching and dynamic decision trees.
+- **🛡️ Enterprise Security**: Optional **AES-256-GCM** encryption for all sensitive PII data-at-rest.
+- **🧟‍♂️ Self-Healing (Zombie Recovery)**: Automatic recovery from worker crashes. Stalled tasks are reclaimed after a 5-minute visibility timeout.
+- **🛑 Execution Cancellation**: Instantly stop unwanted or malfunctioning workflows via the management API.
 - **🏗️ Fluent Go Builder**: A type-safe, chainable DSL to build complex workflows directly in Go.
-- **📈 Native Observability**: **Zero-dependency Prometheus metrics** exporter. No external libraries, just pure high-performance atomic counters.
-- **⚡ Webhook & API Layer**: Trigger workflows via Webhooks and monitor them via a management REST API.
-- **💎 Architectural Purity**: Isolated `internal` logic with a centralized `tests/` directory.
-- **🚀 High-Load Ready**: Optimized with `SKIP LOCKED`, exponential backoff, and connection pool tuning.
-- **🌍 Multi-Tenant Isolation**: Agnostic `Namespace` and `Labels` system for SaaS scalability.
+- **📈 Native Observability**: **Zero-dependency Prometheus metrics** exporter for real-time throughput and health tracking.
+- **🚀 High-Load Performance**: Optimized SQL with **Composite Indexes** and `SKIP LOCKED` concurrency.
+- **🌍 Multi-Tenant Isolation**: Native `Namespace` and `Labels` support for ultimate scalability.
 
 ---
 
 ## 🏗️ Fluent Builder Example
 
-Build complex DAGs with zero effort:
+Define complex business logic with zero friction:
 
 ```go
 wf := builder.NewWorkflow("signup-flow", "User Signup")
@@ -35,22 +35,31 @@ wf := builder.NewWorkflow("signup-flow", "User Signup")
 
 ---
 
-## 📉 Zero-Dependency Monitoring (Prometheus)
+## 🧟‍♂️ Reliability & Self-Healing
 
-Parevo Flow exposes native Prometheus metrics at `/metrics` using pure Go atomics. No external library overhead:
-- `parevo_flow_tasks_processed_total`: Total throughput.
-- `parevo_flow_tasks_failed_total`: Error rate tracking.
-- `parevo_flow_active_workers`: Current scale of your worker fleet.
+Parevo Flow is built for production stability. If a worker node crashes mid-task:
+1. The engine detects the **Zombie Task** using the `updated_at` heartbeat.
+2. The task is released back to the pool after the **Visibility Timeout**.
+3. Another worker automatically claims and continues the execution.
 
 ---
 
-## 🛡️ Enterprise Security (AES-256)
+## 🛡️ Enterprise Security
 
-Protect your data-at-rest with a single line of code:
+Securing customer data is a single command away:
 ```go
 crypto, _ := storage.NewCrypto("64-char-hex-encryption-key...")
-sqlStore.SetEncryption(crypto) // All Input/Output data will be AES-256-GCM secured!
+sqlStore.SetEncryption(crypto) // All Input/Output data is now AES-256 secured!
 ```
+
+---
+
+## 📈 Monitoring (Prometheus)
+
+Expose industry-standard metrics at `/metrics` with **zero external libraries**:
+- `parevo_flow_tasks_processed_total`: Total throughput.
+- `parevo_flow_tasks_failed_total`: Error rate tracking.
+- `parevo_flow_active_workers`: Current scale of your worker fleet.
 
 ---
 
@@ -59,12 +68,12 @@ sqlStore.SetEncryption(crypto) // All Input/Output data will be AES-256-GCM secu
 ```text
 .
 ├── internal/
-│   ├── builder/      # Fluent Go DSL
-│   ├── engine/       # Core Orchestration (The Brain)
-│   ├── storage/      # Persistence & AES-Crypto (The Vault)
-│   ├── node/         # Logic Nodes (Wait, Condition, etc.)
-│   └── trigger/      # API, Webhooks & Metrics (The Interface)
-├── tests/            # Unified quality gate
+│   ├── builder/      # Fluent Go DSL Builders
+│   ├── engine/       # Core Brain & DAG Orchestration
+│   ├── storage/      # The Vault (SQL Drivers & AES-Crypto)
+│   ├── node/         # Logic Nodes (Wait, Condition, HTTP, etc.)
+│   └── trigger/      # Interface (API, Webhooks & Metrics)
+├── tests/            # Professional Quality Gate
 └── README.md         # This masterpiece
 ```
 

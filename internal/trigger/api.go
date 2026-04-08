@@ -79,6 +79,22 @@ func (m *APIManager) handleManagementAPI(w http.ResponseWriter, r *http.Request,
 			json.NewEncoder(w).Encode(exec)
 			return
 		}
+		if len(parts) == 5 && parts[4] == "cancel" {
+			// Cancel Execution
+			execID := parts[3]
+			if r.Method != http.MethodPost {
+				http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+				return
+			}
+			err := m.webhookMgr.engine.CancelExecution(r.Context(), namespace, execID)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte(`{"status":"cancelled"}`))
+			return
+		}
 	}
 
 	http.NotFound(w, r)

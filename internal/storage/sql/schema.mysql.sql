@@ -44,7 +44,10 @@ CREATE TABLE execution_steps (
     worker_id VARCHAR(255),
     scheduled_at TIMESTAMP NULL,
     started_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     finished_at TIMESTAMP NULL,
-    INDEX (namespace, status, execution_id),
+    INDEX (namespace, status, scheduled_at),
+    INDEX (execution_id),
+    INDEX (status, updated_at),
     INDEX (worker_id)
 );
