@@ -257,14 +257,6 @@ func (e *Engine) mergeSignalData(existingInput string, signalData string) string
 		inputMap = make(map[string]interface{})
 	}
 
-	// Parse signal data
-	var signalMap map[string]interface{}
-	if signalData != "" {
-		_ = json.Unmarshal([]byte(signalData), &signalMap)
-	}
-	if signalMap == nil {
-		signalMap = make(map[string]interface{})
-	}
 
 	// Merge: signal data overwrites existing keys
 	for k, v := range signalMap {
