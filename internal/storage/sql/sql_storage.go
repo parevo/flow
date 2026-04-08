@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"log"
+	"strings"
 	"time"
 
 	"github.com/jmoiron/sqlx"
@@ -15,6 +17,7 @@ import (
 type Dialect interface {
 	Placeholder(n int) string
 	SkipLocked(query string) string
+	GetSchema() string
 }
 
 type MySQLDialect struct{}
@@ -23,12 +26,18 @@ func (d MySQLDialect) Placeholder(n int) string { return "?" }
 func (d MySQLDialect) SkipLocked(query string) string {
 	return query + " FOR UPDATE SKIP LOCKED"
 }
+func (d MySQLDialect) GetSchema() string {
+	return mysqlSchema
+}
 
 type PostgresDialect struct{}
 
 func (d PostgresDialect) Placeholder(n int) string { return fmt.Sprintf("$%d", n) }
 func (d PostgresDialect) SkipLocked(query string) string {
 	return query + " FOR UPDATE SKIP LOCKED"
+}
+func (d PostgresDialect) GetSchema() string {
+	return postgresSchema
 }
 
 type SQLStorage struct {
@@ -47,12 +56,153 @@ func NewSQLStorage(db *sqlx.DB, dialectName string) (*SQLStorage, error) {
 	default:
 		return nil, fmt.Errorf("unsupported dialect: %s", dialectName)
 	}
-	return &SQLStorage{db: db, dialect: dialect}, nil
+	storage := &SQLStorage{db: db, dialect: dialect}
+
+	// Auto-run migrations
+	if err := storage.RunMigrations(); err != nil {
+		log.Printf("⚠️  Migration warning (tables may already exist): %v", err)
+	}
+
+	return storage, nil
+}
+
+// RunMigrations creates the necessary tables if they don't exist
+func (s *SQLStorage) RunMigrations() error {
+	schema := s.dialect.GetSchema()
+	statements := strings.Split(schema, ";")
+
+	for _, stmt := range statements {
+		stmt = strings.TrimSpace(stmt)
+		if stmt == "" || stmt == "--" {
+			continue
+		}
+
+		_, err := s.db.Exec(stmt)
+		if err != nil {
+			// Ignore "already exists" errors
+			if !strings.Contains(err.Error(), "already exists") &&
+			   !strings.Contains(err.Error(), "duplicate") {
+				return fmt.Errorf("migration error: %w", err)
+			}
+		}
+	}
+
+	log.Println("✅ Database migrations completed successfully")
+	return nil
 }
 
 func (s *SQLStorage) SetEncryption(crypto *storage.Crypto) {
 	s.crypto = crypto
 }
+
+// Schema definitions
+const mysqlSchema = `
+CREATE TABLE IF NOT EXISTS workflows (
+    id VARCHAR(36) PRIMARY KEY,
+    namespace VARCHAR(255) NOT NULL,
+    name VARCHAR(255) NOT NULL,
+    description TEXT,
+    version INT NOT NULL,
+    status VARCHAR(50) NOT NULL,
+    definition JSON NOT NULL,
+    labels JSON,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_wf_namespace (namespace)
+);
+
+CREATE TABLE IF NOT EXISTS executions (
+    id VARCHAR(36) PRIMARY KEY,
+    namespace VARCHAR(255) NOT NULL,
+    workflow_id VARCHAR(36) NOT NULL,
+    version INT NOT NULL,
+    status VARCHAR(50) NOT NULL,
+    input JSON,
+    output JSON,
+    labels JSON,
+    error_message TEXT,
+    started_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    finished_at TIMESTAMP NULL,
+    INDEX idx_exec_namespace_status (namespace, status),
+    INDEX idx_exec_workflow (workflow_id)
+);
+
+CREATE TABLE IF NOT EXISTS execution_steps (
+    id VARCHAR(36) PRIMARY KEY,
+    namespace VARCHAR(255) NOT NULL,
+    execution_id VARCHAR(36) NOT NULL,
+    node_id VARCHAR(255) NOT NULL,
+    status VARCHAR(50) NOT NULL,
+    input JSON,
+    output JSON,
+    error TEXT,
+    labels JSON,
+    attempt_number INT DEFAULT 0,
+    worker_id VARCHAR(255),
+    scheduled_at TIMESTAMP NULL,
+    started_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    finished_at TIMESTAMP NULL,
+    INDEX idx_steps_claim (namespace, status, scheduled_at),
+    INDEX idx_steps_execution (execution_id),
+    INDEX idx_steps_status_updated (status, updated_at),
+    INDEX idx_steps_worker (worker_id)
+);
+`
+
+const postgresSchema = `
+CREATE TABLE IF NOT EXISTS workflows (
+    id UUID PRIMARY KEY,
+    namespace VARCHAR(255) NOT NULL,
+    name VARCHAR(255) NOT NULL,
+    description TEXT,
+    version INT NOT NULL,
+    status VARCHAR(50) NOT NULL,
+    definition JSONB NOT NULL,
+    labels JSONB,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_wf_namespace ON workflows(namespace);
+
+CREATE TABLE IF NOT EXISTS executions (
+    id UUID PRIMARY KEY,
+    namespace VARCHAR(255) NOT NULL,
+    workflow_id UUID NOT NULL,
+    version INT NOT NULL,
+    status VARCHAR(50) NOT NULL,
+    input JSONB,
+    output JSONB,
+    labels JSONB,
+    error_message TEXT,
+    started_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    finished_at TIMESTAMP WITH TIME ZONE NULL
+);
+CREATE INDEX IF NOT EXISTS idx_exec_namespace_status ON executions(namespace, status);
+CREATE INDEX IF NOT EXISTS idx_exec_workflow ON executions(workflow_id);
+
+CREATE TABLE IF NOT EXISTS execution_steps (
+    id UUID PRIMARY KEY,
+    namespace VARCHAR(255) NOT NULL,
+    execution_id UUID NOT NULL,
+    node_id VARCHAR(255) NOT NULL,
+    status VARCHAR(50) NOT NULL,
+    input JSONB,
+    output JSONB,
+    error TEXT,
+    labels JSONB,
+    attempt_number INT DEFAULT 0,
+    worker_id VARCHAR(255),
+    scheduled_at TIMESTAMP WITH TIME ZONE NULL,
+    started_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    finished_at TIMESTAMP WITH TIME ZONE NULL
+);
+CREATE INDEX IF NOT EXISTS idx_steps_claim ON execution_steps(namespace, status, scheduled_at);
+CREATE INDEX IF NOT EXISTS idx_steps_execution ON execution_steps(execution_id);
+CREATE INDEX IF NOT EXISTS idx_steps_status_updated ON execution_steps(status, updated_at);
+CREATE INDEX IF NOT EXISTS idx_steps_worker ON execution_steps(worker_id);
+`
 
 func (s *SQLStorage) SaveWorkflow(ctx context.Context, namespace string, wf *models.Workflow) error {
 	wf.Namespace = namespace
@@ -273,11 +423,11 @@ func (s *SQLStorage) ClaimReadyStep(ctx context.Context, namespace string, worke
 	// A task is claimable if:
 	// 1. It's PENDING and scheduled_at is now or in the past.
 	// 2. It's RUNNING but hasn't been updated for more than 5 minutes (Zombie/Worker Dead).
-	
+
 	// MySQL Version
 	query := "SELECT * FROM execution_steps WHERE (status = 'PENDING' AND (scheduled_at IS NULL OR scheduled_at <= ?)) OR (status = 'RUNNING' AND updated_at <= ?)"
 	args := []interface{}{time.Now(), time.Now().Add(-5 * time.Minute)}
-	
+
 	if namespace != "" {
 		query = "SELECT * FROM execution_steps WHERE ((status = 'PENDING' AND (scheduled_at IS NULL OR scheduled_at <= ?)) OR (status = 'RUNNING' AND updated_at <= ?)) AND namespace = ?"
 		args = append(args, namespace)
@@ -316,6 +466,6 @@ func (s *SQLStorage) ClaimReadyStep(ctx context.Context, namespace string, worke
 
 	step.Status = models.TaskRunning
 	step.WorkerID = workerID
-	
+
 	return &step, tx.Commit()
 }

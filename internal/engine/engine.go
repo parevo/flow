@@ -405,6 +405,27 @@ func (e *Engine) GetLogger() *slog.Logger {
 	return e.logger
 }
 
+// RegisterWorkflow saves a workflow definition to storage
+func (e *Engine) RegisterWorkflow(ctx context.Context, namespace string, wf *models.Workflow) error {
+	wf.Namespace = namespace
+	wf.Status = models.WorkflowActive
+	wf.CreatedAt = time.Now()
+	wf.UpdatedAt = time.Now()
+	return e.storage.SaveWorkflow(ctx, namespace, wf)
+}
+
+// Execute is an alias for StartWorkflow (accepts []byte input)
+func (e *Engine) Execute(ctx context.Context, namespace, workflowID string, input []byte) (string, error) {
+	return e.StartWorkflow(ctx, namespace, workflowID, string(input))
+}
+
+// StartWorker starts a worker loop that processes tasks
+func (e *Engine) StartWorker(ctx context.Context, namespace, workerID string) {
+	worker := NewWorker(workerID, e, nil, 100*time.Millisecond)
+	worker.SetNamespace(namespace)
+	worker.Start(ctx)
+}
+
 func (e *Engine) GetExecutionSteps(ctx context.Context, namespace string, execID string) ([]*models.ExecutionStep, error) {
 	return e.storage.GetExecutionSteps(ctx, namespace, execID)
 }
