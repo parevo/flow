@@ -3,7 +3,7 @@ package engine
 import (
 	"context"
 	"fmt"
-	"log"
+	"sync"
 	"time"
 
 	"github.com/parevo/flow/internal/models"
@@ -11,10 +11,12 @@ import (
 
 type Worker struct {
 	id        string
-	namespace string // Optional: filter by namespace
+	namespace string
 	engine    *Engine
 	registry  *Registry
 	interval  time.Duration
+	mu        sync.Mutex
+	running   bool
 }
 
 func NewWorker(id string, engine *Engine, registry *Registry, interval time.Duration) *Worker {
@@ -32,7 +34,7 @@ func (w *Worker) SetNamespace(namespace string) {
 }
 
 func (w *Worker) Start(ctx context.Context) {
-	log.Printf("Worker %s started (Namespace: %s)\n", w.id, w.namespace)
+	w.engine.logger.Info("Worker started", "id", w.id, "namespace", w.namespace)
 	GetTelemetry().WorkerStarted()
 	defer GetTelemetry().WorkerStopped()
 	
@@ -42,7 +44,7 @@ func (w *Worker) Start(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
-			log.Printf("Worker %s stopping\n", w.id)
+			w.engine.logger.Info("Worker received shutdown signal", "id", w.id)
 			return
 		case <-ticker.C:
 			w.processOne(ctx)
@@ -51,21 +53,26 @@ func (w *Worker) Start(ctx context.Context) {
 }
 
 func (w *Worker) processOne(ctx context.Context) {
-	// ClaimReadyStep now takes namespace
+	w.mu.Lock()
+	w.running = true
+	defer func() {
+		w.mu.Unlock()
+		w.running = false
+	}()
+
 	step, err := w.engine.storage.ClaimReadyStep(ctx, w.namespace, w.id)
 	if err != nil {
-		log.Printf("Worker %s: failed to claim step: %v\n", w.id, err)
+		w.engine.logger.Error("Failed to claim step", "id", w.id, "error", err)
 		return
 	}
 
 	if step == nil {
-		return // No work
+		return
 	}
 
-	// Safety Check: If parent execution is cancelled, skip this step
 	exec, err := w.engine.storage.GetExecution(ctx, step.Namespace, step.ExecutionID)
 	if err == nil && exec.Status == models.TaskCancelled {
-		log.Printf("Worker %s: step %s skipped because execution %s is CANCELLED\n", w.id, step.ID, exec.ID)
+		w.engine.logger.Warn("Step skipped due to cancellation", "worker", w.id, "step", step.ID, "execution", exec.ID)
 		step.Status = models.TaskCancelled
 		now := time.Now()
 		step.FinishedAt = &now
@@ -74,32 +81,27 @@ func (w *Worker) processOne(ctx context.Context) {
 	}
 
 	GetTelemetry().IncProcessed()
-	log.Printf("Worker %s: processing step %s (Namespace: %s, Node: %s)\n", w.id, step.ID, step.Namespace, step.NodeID)
+	w.engine.logger.Info("Processing step", "worker", w.id, "step", step.ID, "node", step.NodeID, "namespace", step.Namespace)
 
-	// Execute node logic
 	output, err := w.executeStep(ctx, step)
 	if err != nil {
-		log.Printf("Worker %s: step %s failed (Attempt %d): %v\n", w.id, step.ID, step.AttemptNumber, err)
+		w.engine.logger.Error("Step execution failed", "worker", w.id, "step", step.ID, "attempt", step.AttemptNumber, "error", err)
 		
-		// HIGH-LOAD: Handle retries with Exponential Backoff
 		maxRetries := 5
 		if step.AttemptNumber < maxRetries {
 			step.AttemptNumber++
-			
-			// Exponential Backoff: 2^attempt * 10 seconds
 			delay := time.Duration(1<<uint(step.AttemptNumber)) * 10 * time.Second
 			nextScheduled := time.Now().Add(delay)
 			step.ScheduledAt = &nextScheduled
 			step.Status = models.TaskPending
 			step.Error = err.Error()
 			
-			log.Printf("Worker %s: rescheduling step %s for %v\n", w.id, step.ID, nextScheduled.Format(time.RFC3339))
+			w.engine.logger.Info("Rescheduling step with backoff", "worker", w.id, "step", step.ID, "next_run", nextScheduled.Format(time.RFC3339))
 			GetTelemetry().IncRetried()
 			w.engine.storage.UpdateExecutionStep(ctx, step.Namespace, step)
 			return
 		}
 
-		// Hard Fail after max retries
 		step.Status = models.TaskFailed
 		step.Error = fmt.Sprintf("Max retries reached: %v", err)
 		now := time.Now()
@@ -109,9 +111,8 @@ func (w *Worker) processOne(ctx context.Context) {
 		return
 	}
 
-	// Complete step and trigger transitions
 	if err := w.engine.CompleteStep(ctx, step, output); err != nil {
-		log.Printf("Worker %s: failed to complete step %s: %v\n", w.id, step.ID, err)
+		w.engine.logger.Error("Failed to complete step", "worker", w.id, "step", step.ID, "error", err)
 	}
 }
 

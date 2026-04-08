@@ -22,6 +22,9 @@ type PassThroughNode struct{}
 func (n *PassThroughNode) Execute(ctx context.Context, config map[string]interface{}, input string) (string, error) {
 	return input, nil
 }
+func (n *PassThroughNode) Validate(config map[string]interface{}) error {
+	return nil
+}
 
 func TestIntelligenceAndSecurity(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)

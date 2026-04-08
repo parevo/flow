@@ -3,6 +3,8 @@ package engine
 import (
 	"context"
 	"fmt"
+	"log/slog"
+	"os"
 	"time"
 
 	"github.com/google/uuid"
@@ -13,13 +15,20 @@ import (
 type Engine struct {
 	storage  storage.Storage
 	registry *Registry
+	logger   *slog.Logger
 }
 
 func NewEngine(s storage.Storage, r *Registry) *Engine {
 	return &Engine{
 		storage:  s,
 		registry: r,
+		logger:   slog.New(slog.NewJSONHandler(os.Stdout, nil)),
 	}
+}
+
+func (e *Engine) WithLogger(l *slog.Logger) *Engine {
+	e.logger = l
+	return e
 }
 
 // StartWorkflow creates a new execution for a workflow
@@ -48,6 +57,17 @@ func (e *Engine) StartWorkflow(ctx context.Context, namespace, workflowID string
 	g, err := NewGraph(wf)
 	if err != nil {
 		return "", err
+	}
+
+	// Early Validation: Check all nodes in the graph
+	for _, n := range wf.Nodes {
+		executor, err := e.registry.Get(n.Type)
+		if err != nil {
+			return "", fmt.Errorf("node %s: %w", n.ID, err)
+		}
+		if err := executor.Validate(n.Config); err != nil {
+			return "", fmt.Errorf("node %s configuration error: %w", n.ID, err)
+		}
 	}
 
 	initialNodeIDs := g.GetInitialNodes()

@@ -8,6 +8,7 @@ import (
 // NodeExecutor defines the interface for a node's logic
 type NodeExecutor interface {
 	Execute(ctx context.Context, config map[string]interface{}, input string) (string, error)
+	Validate(config map[string]interface{}) error
 }
 
 // Registry holds the map of available node executors
@@ -35,7 +36,14 @@ func (r *Registry) Get(nodeType string) (NodeExecutor, error) {
 type LogNode struct{}
 
 func (l *LogNode) Execute(ctx context.Context, config map[string]interface{}, input string) (string, error) {
-	msg := config["message"].(string)
+	msg, _ := config["message"].(string)
 	fmt.Printf("[LOG] %s (Input: %s)\n", msg, input)
 	return fmt.Sprintf("Logged: %s", msg), nil
+}
+
+func (l *LogNode) Validate(config map[string]interface{}) error {
+	if _, ok := config["message"].(string); !ok {
+		return fmt.Errorf("missing or invalid 'message' in config")
+	}
+	return nil
 }

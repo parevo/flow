@@ -57,3 +57,10 @@ func (h *HTTPNode) Execute(ctx context.Context, config map[string]interface{}, i
 
 	return string(body), nil
 }
+
+func (h *HTTPNode) Validate(config map[string]interface{}) error {
+	if _, ok := config["url"].(string); !ok {
+		return fmt.Errorf("missing 'url' in http config")
+	}
+	return nil
+}

@@ -41,3 +41,16 @@ func (n *ConditionNode) Execute(ctx context.Context, config map[string]interface
 
 	return fmt.Sprintf(`{"branch": "%s"}`, branch), nil
 }
+
+func (n *ConditionNode) Validate(config map[string]interface{}) error {
+	if _, ok := config["variable"].(string); !ok {
+		return fmt.Errorf("missing 'variable' in condition config")
+	}
+	if _, ok := config["operator"].(string); !ok {
+		return fmt.Errorf("missing 'operator' in condition config")
+	}
+	if _, ok := config["value"]; !ok {
+		return fmt.Errorf("missing 'value' in condition config")
+	}
+	return nil
+}
