@@ -1,0 +1,44 @@
+{
+  "id": "onboarding-wf",
+  "name": "User Onboarding Flow",
+  "version": 1,
+  "status": "ACTIVE",
+  "nodes": [
+    {
+      "id": "node-welcome",
+      "type": "log",
+      "name": "Welcome Log",
+      "config": {
+        "message": "Welcome to the SaaS platform!"
+      }
+    },
+    {
+      "id": "node-wait-3s",
+      "type": "wait",
+      "name": "Wait for Nudge",
+      "config": {
+        "duration": "3s"
+      }
+    },
+    {
+      "id": "node-nudge-email",
+      "type": "log",
+      "name": "Send Nudge Email",
+      "config": {
+        "message": "Checking if you need help with onboarding..."
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e1",
+      "sourceId": "node-welcome",
+      "targetId": "node-wait-3s"
+    },
+    {
+      "id": "e2",
+      "sourceId": "node-wait-3s",
+      "targetId": "node-nudge-email"
+    }
+  ]
+}

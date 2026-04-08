@@ -1,0 +1,31 @@
+version: '3.8'
+
+services:
+  mysql:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: parevo_flow
+    ports:
+      - "3306:3306"
+    volumes:
+      - ./internal/storage/sql/schema.mysql.sql:/docker-entrypoint-initdb.d/schema.sql
+
+  postgres:
+    image: postgres:15
+    environment:
+      POSTGRES_PASSWORD: root
+      POSTGRES_DB: parevo_flow
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./internal/storage/sql/schema.postgres.sql:/docker-entrypoint-initdb.d/schema.sql
+
+  # Optional: Example Runner (can be linked to DBs)
+  # example:
+  #   build: .
+  #   environment:
+  #     - DB_DRIVER=mysql
+  #     - DB_DSN=root:root@tcp(mysql:3306)/parevo_flow?parseTime=true
+  #   depends_on:
+  #     - mysql
