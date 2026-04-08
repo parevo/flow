@@ -405,7 +405,7 @@ func (b *WorkflowBuilder) Build() *Workflow {
 
 // Visualize generates a Mermaid diagram of the workflow
 func (b *WorkflowBuilder) Visualize() string {
-	return b.WorkflowBuilder.Visualise()
+	return b.Visualise()
 }
 
 // WithConfig adds configuration to a node

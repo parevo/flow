@@ -27,7 +27,7 @@ func (n *ConditionNode) Execute(ctx context.Context, config map[string]interface
 
 	variable, _ := config["variable"].(string)
 	operator, _ := config["operator"].(string)
-	value, _ := config["value"]
+	value := config["value"]
 
 	inputValue, exists := inMap[variable]
 	if !exists {

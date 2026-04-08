@@ -40,7 +40,7 @@ func (m *WebhookManager) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Failed to read body", http.StatusInternalServerError)
 		return
 	}
-	defer r.Body.Close()
+	defer func() { _ = r.Body.Close() }()
 
 	execID, err := m.engine.StartWorkflow(context.Background(), namespace, workflowID, string(body))
 	if err != nil {

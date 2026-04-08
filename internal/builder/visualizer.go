@@ -21,11 +21,12 @@ func ToMermaid(wf *models.Workflow) string {
 		}
 
 		shape := "[%s]"
-		if n.Type == "condition" {
+		switch n.Type {
+		case "condition":
 			shape = "{" + "{%s}" + "}" // { {Label}} is a diamond in Mermaid
-		} else if n.Type == "signal" {
+		case "signal":
 			shape = "([%s])" // Oval for signals
-		} else if n.Type == "subworkflow" {
+		case "subworkflow":
 			shape = "[/%s/]" // Parallelogram for sub-workflows
 		}
 

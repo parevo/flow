@@ -2,6 +2,7 @@ package engine
 
 import (
 	"context"
+
 	"github.com/parevo/flow/internal/models"
 )
 
@@ -59,7 +60,7 @@ func (eb *EventBus) RegisterGlobalHandler(handler EventHandler) {
 	for eventType := range eb.handlers {
 		eb.handlers[eventType] = append(eb.handlers[eventType], handler)
 	}
-	
+
 	// Also register for event types that might be added later
 	allEventTypes := []EventType{
 		EventTypeWorkflowStarted,
@@ -74,7 +75,7 @@ func (eb *EventBus) RegisterGlobalHandler(handler EventHandler) {
 		EventTypeSignalReceived,
 		EventTypeCompensationTriggered,
 	}
-	
+
 	for _, eventType := range allEventTypes {
 		if _, exists := eb.handlers[eventType]; !exists {
 			eb.handlers[eventType] = []EventHandler{}
@@ -89,15 +90,12 @@ func (eb *EventBus) Emit(ctx context.Context, event Event) {
 	if len(handlers) == 0 {
 		return
 	}
-	
+
 	// Execute handlers asynchronously to not block workflow execution
 	for _, handler := range handlers {
 		go func(h EventHandler) {
-			if err := h.HandleEvent(ctx, event); err != nil {
-				// Log error but don't fail workflow
-				// In production, use proper logger
-				// log.Printf("Event handler error: %v", err)
-			}
+			// Intentionally ignoring error to not block workflow execution
+			_ = h.HandleEvent(ctx, event)
 		}(handler)
 	}
 }
@@ -108,13 +106,13 @@ func (eb *EventBus) EmitSync(ctx context.Context, event Event) []error {
 	if len(handlers) == 0 {
 		return nil
 	}
-	
+
 	var errors []error
 	for _, handler := range handlers {
 		if err := handler.HandleEvent(ctx, event); err != nil {
 			errors = append(errors, err)
 		}
 	}
-	
+
 	return errors
 }

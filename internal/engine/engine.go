@@ -159,7 +159,7 @@ func (e *Engine) CompleteStep(ctx context.Context, step *models.ExecutionStep, o
 						if s.NodeID == pID {
 							// In aggregation, use the latest output of each predecessor
 							var outData interface{}
-							json.Unmarshal([]byte(s.Output), &outData)
+							_ = json.Unmarshal([]byte(s.Output), &outData)
 							aggMap[pID] = outData
 						}
 					}
@@ -251,7 +251,7 @@ func (e *Engine) mergeSignalData(existingInput string, signalData string) string
 	// Parse existing input
 	var inputMap map[string]interface{}
 	if existingInput != "" {
-		json.Unmarshal([]byte(existingInput), &inputMap)
+		_ = json.Unmarshal([]byte(existingInput), &inputMap)
 	}
 	if inputMap == nil {
 		inputMap = make(map[string]interface{})

@@ -113,7 +113,7 @@ func (g *Graph) GetNextNodesWithBranch(nodeID string, output string) []string {
 
 	// Parse output to see if it specifies a branch
 	var outMap map[string]interface{}
-	json.Unmarshal([]byte(output), &outMap)
+	_ = json.Unmarshal([]byte(output), &outMap)
 
 	branch, hasBranch := outMap["branch"].(string)
 

@@ -40,7 +40,7 @@ func (n *NotifyNode) Execute(_ context.Context, config map[string]interface{}, i
 
 	// Parse input as template data
 	var inMap map[string]interface{}
-	json.Unmarshal([]byte(input), &inMap)
+	_ = json.Unmarshal([]byte(input), &inMap)
 	if inMap == nil {
 		inMap = map[string]interface{}{}
 	}
@@ -77,7 +77,7 @@ func (n *NotifyNode) Execute(_ context.Context, config map[string]interface{}, i
 	if err != nil {
 		return "", fmt.Errorf("notify: request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode >= 400 {
 		return "", fmt.Errorf("notify: webhook returned HTTP %d", resp.StatusCode)

@@ -49,7 +49,7 @@ func (n *AINode) Execute(ctx context.Context, config map[string]interface{}, inp
 	// Parse input JSON
 	var inputMap map[string]interface{}
 	if input != "" {
-		json.Unmarshal([]byte(input), &inputMap)
+		_ = json.Unmarshal([]byte(input), &inputMap)
 	}
 	if inputMap == nil {
 		inputMap = make(map[string]interface{})
@@ -179,7 +179,7 @@ func (n *AINode) callOpenAI(ctx context.Context, apiKey, model, systemPrompt, pr
 	if err != nil {
 		return "", err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	body, _ := io.ReadAll(resp.Body)
 
@@ -246,7 +246,7 @@ func (n *AINode) callAnthropic(ctx context.Context, apiKey, model, systemPrompt,
 	if err != nil {
 		return "", err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	body, _ := io.ReadAll(resp.Body)
 
@@ -321,7 +321,7 @@ func (n *AINode) callGemini(ctx context.Context, apiKey, model, prompt string, t
 	if err != nil {
 		return "", err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	body, _ := io.ReadAll(resp.Body)
 
