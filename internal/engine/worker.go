@@ -35,8 +35,8 @@ func (w *Worker) SetNamespace(namespace string) {
 
 func (w *Worker) Start(ctx context.Context) {
 	w.engine.logger.Info("Worker started", "id", w.id, "namespace", w.namespace)
-	GetTelemetry().WorkerStarted()
-	defer GetTelemetry().WorkerStopped()
+	GetTelemetry().WorkerStarted(w.id)
+	defer GetTelemetry().WorkerStopped(w.id)
 	
 	ticker := time.NewTicker(w.interval)
 	defer ticker.Stop()
@@ -80,96 +80,118 @@ func (w *Worker) processOne(ctx context.Context) {
 		return
 	}
 
-	GetTelemetry().IncProcessed()
+	// We'll increment processed after finding node type below
 	w.engine.logger.Info("Processing step", "worker", w.id, "step", step.ID, "node", step.NodeID, "namespace", step.Namespace)
 
+	start := time.Now()
 	output, err := w.executeStep(ctx, step)
+	duration := time.Since(start)
+	
+	// Determine node type for metrics
+	nodeType := "unknown"
+	wf, _ := w.engine.storage.GetWorkflow(ctx, step.Namespace, exec.WorkflowID)
+	for _, n := range wf.Nodes {
+		if n.ID == step.NodeID {
+			nodeType = n.Type
+			break
+		}
+	}
+
 	if err != nil {
 		// Native Signal Support: Check for SIGNAL_WAIT
 		if err.Error() == "SIGNAL_WAIT" {
 			w.engine.logger.Info("Step entering WAITING state for external signal", "worker", w.id, "step", step.ID, "node", step.NodeID)
 			step.Status = models.TaskWaiting
 			w.engine.storage.UpdateExecutionStep(ctx, step.Namespace, step)
+			GetTelemetry().IncProcessed(step.Namespace, nodeType, "waiting")
 			return
 		}
 
 		w.engine.logger.Error("Step execution failed", "worker", w.id, "step", step.ID, "attempt", step.AttemptNumber, "error", err)
 		
-		// Find Node to get its RetryPolicy
-		var node models.Node
-		wf, _ := w.engine.storage.GetWorkflow(ctx, step.Namespace, exec.WorkflowID)
-		for _, n := range wf.Nodes {
-			if n.ID == step.NodeID {
-				node = n
-				break
-			}
-		}
-
 		// Dynamic Retry Policy
-		policy := node.RetryPolicy
-		if policy == nil {
-			// Default Policy: 3 attempts, 10s exp backoff
-			policy = &models.RetryPolicy{
-				MaxAttempts:       3,
-				InitialInterval:   10 * time.Second,
-				BackoffCoefficient: 2.0,
-				MaximumInterval:   5 * time.Minute,
-			}
-		}
+		policy := w.getRetryPolicy(wf, step.NodeID)
 
 		if step.AttemptNumber < policy.MaxAttempts {
 			step.AttemptNumber++
+			delay := w.calculateBackoff(policy, step.AttemptNumber)
 			
-			// Calculate Backoff: interval = initial * (coef ^ attempt)
-			delay := time.Duration(float64(policy.InitialInterval) * (policy.BackoffCoefficient))
-			if step.AttemptNumber > 1 {
-				// Simplified backoff logic
-				delay = time.Duration(float64(policy.InitialInterval) * float64(step.AttemptNumber) * policy.BackoffCoefficient)
-			}
-			if delay > policy.MaximumInterval {
-				delay = policy.MaximumInterval
-			}
-
 			nextScheduled := time.Now().Add(delay)
 			step.ScheduledAt = &nextScheduled
 			step.Status = models.TaskPending
 			step.Error = err.Error()
 			
 			w.engine.logger.Info("Rescheduling step with dynamic backoff", "worker", w.id, "step", step.ID, "next_run", nextScheduled.Format(time.RFC3339))
-			GetTelemetry().IncRetried()
+			GetTelemetry().IncProcessed(step.Namespace, nodeType, "retried")
 			w.engine.storage.UpdateExecutionStep(ctx, step.Namespace, step)
 			return
 		}
 
-		// Hard Fail: Check for SAGA Compensation Node
+		// Hard Fail
 		step.Status = models.TaskFailed
 		step.Error = fmt.Sprintf("Max retries reached: %v", err)
 		now := time.Now()
 		step.FinishedAt = &now
-		GetTelemetry().IncFailed()
+		GetTelemetry().IncProcessed(step.Namespace, nodeType, "failed")
+		GetTelemetry().ObserveDuration(step.Namespace, nodeType, duration)
 		w.engine.storage.UpdateExecutionStep(ctx, step.Namespace, step)
 		
-		// Even if it failed, check if the whole workflow should be marked as FAILED now
 		w.engine.checkAndFinishExecution(ctx, exec)
+		w.handleCompensation(ctx, wf, step, exec, err)
+		return
+	}
 
-		if node.CompensateNodeID != "" {
-			w.engine.logger.Info("Triggering Saga Compensation", "execution", exec.ID, "failed_node", node.ID, "compensation_node", node.CompensateNodeID)
+	GetTelemetry().IncProcessed(step.Namespace, nodeType, "completed")
+	GetTelemetry().ObserveDuration(step.Namespace, nodeType, duration)
+	if err := w.engine.CompleteStep(ctx, step, output); err != nil {
+		w.engine.logger.Error("Failed to complete step", "worker", w.id, "step", step.ID, "error", err)
+	}
+}
+
+func (w *Worker) getRetryPolicy(wf *models.Workflow, nodeID string) *models.RetryPolicy {
+	for _, n := range wf.Nodes {
+		if n.ID == nodeID {
+			if n.RetryPolicy != nil {
+				return n.RetryPolicy
+			}
+			break
+		}
+	}
+	return &models.RetryPolicy{
+		MaxAttempts:        3,
+		InitialInterval:    10 * time.Second,
+		BackoffCoefficient: 2.0,
+		MaximumInterval:    5 * time.Minute,
+	}
+}
+
+func (w *Worker) calculateBackoff(policy *models.RetryPolicy, attempt int) time.Duration {
+	delay := time.Duration(float64(policy.InitialInterval) * (policy.BackoffCoefficient))
+	if attempt > 1 {
+		delay = time.Duration(float64(policy.InitialInterval) * float64(attempt) * policy.BackoffCoefficient)
+	}
+	if delay > policy.MaximumInterval {
+		delay = policy.MaximumInterval
+	}
+	return delay
+}
+
+func (w *Worker) handleCompensation(ctx context.Context, wf *models.Workflow, step *models.ExecutionStep, exec *models.Execution, err error) {
+	for _, n := range wf.Nodes {
+		if n.ID == step.NodeID && n.CompensateNodeID != "" {
+			w.engine.logger.Info("Triggering Saga Compensation", "execution", exec.ID, "failed_node", n.ID, "compensation_node", n.CompensateNodeID)
 			compStep := &models.ExecutionStep{
 				ID:          fmt.Sprintf("comp-%s", step.ID),
 				Namespace:   step.Namespace,
 				ExecutionID: step.ExecutionID,
-				NodeID:      node.CompensateNodeID,
+				NodeID:      n.CompensateNodeID,
 				Status:      models.TaskPending,
-				Input:       fmt.Sprintf(`{"reason": "compensation", "failedNode": "%s", "error": "%s"}`, node.ID, err.Error()),
+				Input:       fmt.Sprintf(`{"reason": "compensation", "failedNode": "%s", "error": "%s"}`, n.ID, err.Error()),
 				StartedAt:   time.Now(),
 			}
 			w.engine.storage.CreateExecutionStep(ctx, step.Namespace, compStep)
+			break
 		}
-		return
-	}
-
-	if err := w.engine.CompleteStep(ctx, step, output); err != nil {
-		w.engine.logger.Error("Failed to complete step", "worker", w.id, "step", step.ID, "error", err)
 	}
 }
 

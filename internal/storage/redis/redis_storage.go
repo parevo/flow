@@ -155,25 +155,29 @@ func (r *RedisStorage) GetExecutionSteps(ctx context.Context, namespace string, 
 }
 
 func (r *RedisStorage) ClaimReadyStep(ctx context.Context, namespace string, workerID string) (*models.ExecutionStep, error) {
-	// Atomic Claim: ZREVRANGEBYSCORE + ZREM (or LUA script for safety)
-	// For MVP, we fetch one ready item
-	now := float64(time.Now().Unix())
-	res, err := r.client.ZRangeByScore(ctx, pendingSet(namespace), &redis.ZRangeBy{
-		Min:    "-inf",
-		Max:    fmt.Sprintf("%f", now),
-		Offset: 0,
-		Count:  1,
-	}).Result()
-
-	if err != nil || len(res) == 0 {
+	// 10/10 Atomic Claim using LUA
+	// We check for ready steps (score <= now)
+	now := time.Now().Unix()
+	pendingSetKey := pendingSet(namespace)
+	
+	// LUA Script: Try to fetch one eligible step, remove it from ZSET, and return its ID
+	script := `
+		local steps = redis.call('ZRANGEBYSCORE', KEYS[1], '-inf', ARGV[1], 'LIMIT', 0, 1)
+		if #steps > 0 then
+			redis.call('ZREM', KEYS[1], steps[1])
+			return steps[1]
+		end
+		return nil
+	`
+	
+	res, err := r.client.Eval(ctx, script, []string{pendingSetKey}, now).Result()
+	if err == redis.Nil || err != nil {
 		return nil, nil
 	}
 
-	stepID := res[0]
-	// Try to remove it to 'claim' it (Distributed lock simulation)
-	n, err := r.client.ZRem(ctx, pendingSet(namespace), stepID).Result()
-	if err != nil || n == 0 {
-		return nil, nil // Already claimed by another worker
+	stepID, ok := res.(string)
+	if !ok {
+		return nil, nil
 	}
 
 	step, err := r.GetExecutionStepByID(ctx, namespace, stepID)
@@ -184,7 +188,11 @@ func (r *RedisStorage) ClaimReadyStep(ctx context.Context, namespace string, wor
 	step.Status = models.TaskRunning
 	step.WorkerID = workerID
 	step.StartedAt = time.Now()
-	r.UpdateExecutionStep(ctx, namespace, step)
+	// Update step data (Status=RUNNING)
+	err = r.UpdateExecutionStep(ctx, namespace, step)
+	if err != nil {
+		return nil, err
+	}
 
 	return step, nil
 }

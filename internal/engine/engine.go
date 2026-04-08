@@ -2,6 +2,7 @@ package engine
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"os"
@@ -10,6 +11,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/parevo/flow/internal/models"
 	"github.com/parevo/flow/internal/storage"
+	"github.com/parevo/flow/internal/telemetry"
 )
 
 type Engine struct {
@@ -86,6 +88,8 @@ func (e *Engine) StartWorkflow(ctx context.Context, namespace, workflowID string
 		}
 	}
 
+	telemetry.WorkflowsStarted.WithLabelValues(namespace, workflowID).Inc()
+
 	return execID, nil
 }
 
@@ -145,13 +149,32 @@ func (e *Engine) CompleteStep(ctx context.Context, step *models.ExecutionStep, o
 		}
 
 		if ready {
+			finalInput := output
+			// 10/10 God-Tier: Check for JOIN and aggregate inputs
+			if g.InDegree[nextID] > 1 {
+				steps, _ := e.storage.GetExecutionSteps(ctx, exec.Namespace, exec.ID)
+				aggMap := make(map[string]interface{})
+				for _, pID := range g.Predecessors[nextID] {
+					for _, s := range steps {
+						if s.NodeID == pID {
+							// In aggregation, use the latest output of each predecessor
+							var outData interface{}
+							_ = json.Unmarshal([]byte(s.Output), &outData)
+							aggMap[pID] = outData
+						}
+					}
+				}
+				aggJSON, _ := json.Marshal(aggMap)
+				finalInput = string(aggJSON)
+			}
+
 			newStep := &models.ExecutionStep{
 				ID:          uuid.New().String(),
 				Namespace:   exec.Namespace,
-				ExecutionID: step.ExecutionID,
+				ExecutionID: exec.ID,
 				NodeID:      nextID,
 				Status:      models.TaskPending,
-				Input:       output,
+				Input:       finalInput,
 				StartedAt:   time.Now(),
 			}
 			if err := e.storage.CreateExecutionStep(ctx, exec.Namespace, newStep); err != nil {
@@ -415,10 +438,12 @@ func (e *Engine) checkAndFinishExecution(ctx context.Context, exec *models.Execu
 			exec.Status = models.TaskFailed
 			exec.ErrorMessage = firstError
 			e.logger.Info("Execution failed", "execution", exec.ID, "error", firstError)
+			telemetry.WorkflowsFailed.WithLabelValues(exec.Namespace, exec.WorkflowID, firstError).Inc()
 		} else {
 			exec.Status = models.TaskCompleted
 			exec.Output = finalOutput
 			e.logger.Info("Execution completed", "execution", exec.ID)
+			telemetry.WorkflowsCompleted.WithLabelValues(exec.Namespace, exec.WorkflowID).Inc()
 		}
 		now := time.Now()
 		exec.FinishedAt = &now

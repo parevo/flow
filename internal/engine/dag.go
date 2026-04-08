@@ -9,22 +9,25 @@ import (
 
 // Graph represents the structure of the workflow
 type Graph struct {
-	Nodes    map[string]models.Node
-	Edges    map[string][]models.Edge // source -> outgoing edges
-	InDegree map[string]int           // target -> number of incoming edges
+	Nodes        map[string]models.Node
+	Edges        map[string][]models.Edge // source -> outgoing edges
+	InDegree     map[string]int           // target -> number of incoming edges
+	Predecessors map[string][]string      // target -> list of parent node IDs
 }
 
 // NewGraph builds a graph from workflow definition
 func NewGraph(wf *models.Workflow) (*Graph, error) {
 	g := &Graph{
-		Nodes:    make(map[string]models.Node),
-		Edges:    make(map[string][]models.Edge),
-		InDegree: make(map[string]int),
+		Nodes:        make(map[string]models.Node),
+		Edges:        make(map[string][]models.Edge),
+		InDegree:     make(map[string]int),
+		Predecessors: make(map[string][]string),
 	}
 
 	for _, node := range wf.Nodes {
 		g.Nodes[node.ID] = node
 		g.InDegree[node.ID] = 0
+		g.Predecessors[node.ID] = []string{}
 	}
 
 	for _, edge := range wf.Edges {
@@ -36,6 +39,7 @@ func NewGraph(wf *models.Workflow) (*Graph, error) {
 		}
 		g.Edges[edge.SourceID] = append(g.Edges[edge.SourceID], edge)
 		g.InDegree[edge.TargetID]++
+		g.Predecessors[edge.TargetID] = append(g.Predecessors[edge.TargetID], edge.SourceID)
 	}
 
 	return g, nil
