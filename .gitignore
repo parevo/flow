@@ -12,3 +12,4 @@ benchmark.txt
 *.so
 *.dylib
 visual_builder
+.DS_Store
