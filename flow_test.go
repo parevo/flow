@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -551,9 +552,9 @@ func TestWorker(t *testing.T) {
 	storage := flow.NewMemoryStorage()
 	registry := flow.NewRegistry()
 
-	executed := false
+	var executed int32
 	registry.RegisterFunction("WorkerTask", func(ctx context.Context, input map[string]interface{}) (map[string]interface{}, error) {
-		executed = true
+		atomic.StoreInt32(&executed, 1)
 		return map[string]interface{}{"done": true}, nil
 	})
 
@@ -580,9 +581,10 @@ func TestWorker(t *testing.T) {
 	time.Sleep(500 * time.Millisecond)
 
 	exec, _ := engine.GetExecution(ctx, "default", execID)
-	t.Logf("Status: %s, Executed: %v", exec.Status, executed)
+	isExecuted := atomic.LoadInt32(&executed)
+	t.Logf("Status: %s, Executed: %v", exec.Status, isExecuted == 1)
 
-	if !executed {
+	if isExecuted == 0 {
 		t.Error("Task not executed by worker")
 	}
 }
@@ -597,10 +599,10 @@ func TestEventBus(t *testing.T) {
 		t.Fatal("NewEventBus returned nil")
 	}
 
-	received := false
+	var received int32
 	handler := &testEventHandler{
 		fn: func(ctx context.Context, event flow.Event) error {
-			received = true
+			atomic.StoreInt32(&received, 1)
 			return nil
 		},
 	}
@@ -610,7 +612,7 @@ func TestEventBus(t *testing.T) {
 
 	time.Sleep(100 * time.Millisecond)
 
-	if !received {
+	if atomic.LoadInt32(&received) == 0 {
 		t.Error("Event not received")
 	}
 }
@@ -618,10 +620,10 @@ func TestEventBus(t *testing.T) {
 func TestEventBusGlobalHandler(t *testing.T) {
 	eventBus := flow.NewEventBus()
 
-	count := 0
+	var count int32
 	handler := &testEventHandler{
 		fn: func(ctx context.Context, event flow.Event) error {
-			count++
+			atomic.AddInt32(&count, 1)
 			return nil
 		},
 	}
@@ -635,8 +637,9 @@ func TestEventBusGlobalHandler(t *testing.T) {
 
 	time.Sleep(200 * time.Millisecond)
 
-	if count != 3 {
-		t.Errorf("Expected 3 events, got %d", count)
+	finalCount := atomic.LoadInt32(&count)
+	if finalCount != 3 {
+		t.Errorf("Expected 3 events, got %d", finalCount)
 	}
 }
 
@@ -961,16 +964,16 @@ func TestCompleteWorkflowExecution(t *testing.T) {
 	storage := flow.NewMemoryStorage()
 	registry := flow.NewRegistry()
 
-	step1Done := false
-	step2Done := false
+	var step1Done int32
+	var step2Done int32
 
 	registry.RegisterFunction("Step1", func(ctx context.Context, input map[string]interface{}) (map[string]interface{}, error) {
-		step1Done = true
+		atomic.StoreInt32(&step1Done, 1)
 		return map[string]interface{}{"step1": "done"}, nil
 	})
 
 	registry.RegisterFunction("Step2", func(ctx context.Context, input map[string]interface{}) (map[string]interface{}, error) {
-		step2Done = true
+		atomic.StoreInt32(&step2Done, 1)
 		return map[string]interface{}{"step2": "done"}, nil
 	})
 
@@ -1006,10 +1009,10 @@ func TestCompleteWorkflowExecution(t *testing.T) {
 	exec, _ := engine.GetExecution(ctx, "default", execID)
 	t.Logf("Final status: %s", exec.Status)
 
-	if !step1Done {
+	if atomic.LoadInt32(&step1Done) == 0 {
 		t.Error("Step1 not executed")
 	}
-	if !step2Done {
+	if atomic.LoadInt32(&step2Done) == 0 {
 		t.Error("Step2 not executed")
 	}
 }
@@ -1072,9 +1075,9 @@ func TestConcurrentWorkflows(t *testing.T) {
 	storage := flow.NewMemoryStorage()
 	registry := flow.NewRegistry()
 
-	execCount := 0
+	var execCount int32
 	registry.RegisterFunction("ConcurrentTask", func(ctx context.Context, input map[string]interface{}) (map[string]interface{}, error) {
-		execCount++
+		atomic.AddInt32(&execCount, 1)
 		time.Sleep(50 * time.Millisecond)
 		return map[string]interface{}{"done": true}, nil
 	})
@@ -1109,7 +1112,7 @@ func TestConcurrentWorkflows(t *testing.T) {
 	}
 
 	time.Sleep(2 * time.Second)
-	t.Logf("Total executions: %d", execCount)
+	t.Logf("Total executions: %d", atomic.LoadInt32(&execCount))
 }
 
 // ============================================

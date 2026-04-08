@@ -75,7 +75,9 @@ func (s *MemoryStorage) GetExecution(ctx context.Context, namespace string, id s
 	if !ok {
 		return nil, fmt.Errorf("execution not found in namespace %s", namespace)
 	}
-	return exec, nil
+	// Return a copy to avoid race conditions when execution is updated by workers
+	execCopy := *exec
+	return &execCopy, nil
 }
 
 func (s *MemoryStorage) UpdateExecution(ctx context.Context, namespace string, exec *models.Execution) error {
@@ -123,7 +125,9 @@ func (s *MemoryStorage) GetExecutionSteps(ctx context.Context, namespace string,
 	var steps []*models.ExecutionStep
 	for _, step := range s.executionSteps {
 		if step.ExecutionID == executionID && step.Namespace == namespace {
-			steps = append(steps, step)
+			// Return a copy to avoid race conditions when steps are updated by workers
+			stepCopy := *step
+			steps = append(steps, &stepCopy)
 		}
 	}
 	return steps, nil
@@ -135,13 +139,13 @@ func (s *MemoryStorage) ClaimReadyStep(ctx context.Context, namespace string, wo
 	now := time.Now()
 	for _, step := range s.executionSteps {
 		isZombie := step.Status == models.TaskRunning && s.ZombieThreshold > 0 && time.Since(step.UpdatedAt) > s.ZombieThreshold
-		
+
 		if step.Status == models.TaskPending || isZombie {
 			if namespace == "" || step.Namespace == namespace {
 				if step.Status == models.TaskPending && (step.ScheduledAt != nil && step.ScheduledAt.After(now)) {
 					continue
 				}
-				
+
 				step.Status = models.TaskRunning
 				step.WorkerID = workerID
 				step.UpdatedAt = now // Refresh heart-beat
