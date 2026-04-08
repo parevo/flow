@@ -176,6 +176,9 @@
             <div class="drag-item" draggable="true" ondragstart="drag(event)" data-node="db_write">
                 ✏️ DB Write
             </div>
+            <div class="drag-item" draggable="true" ondragstart="drag(event)" data-node="ai">
+                🤖 AI (GPT/Claude/Gemini)
+            </div>
         </div>
         <div id="drawflow" ondrop="drop(event)" ondragover="allowDrop(event)">
             <!-- Signal Control Panel -->
@@ -214,6 +217,7 @@
                     <li><code>wait</code> - 3 saniye bekler</li>
                     <li><code>signal</code> - Manuel tetikleme bekler (3 adet)</li>
                     <li><code>http</code> - Dış API çağrısı</li>
+                    <li><code>ai</code> - 🤖 AI analiz (ChatGPT/Claude/Gemini)</li>
                     <li><code>progress</code> - İlerleme gösterir</li>
                     <li><code>condition</code> - Doğrulama dallanması</li>
                 </ul>
@@ -277,6 +281,7 @@
                 <h4>💡 Pro Tips</h4>
                 <ul>
                     <li><strong>Signal → Condition İlişkisi:</strong> Signal'da girdiğiniz Key/Value'lar sonraki node'lara taşınır!</li>
+                    <li><strong>AI Node:</strong> API key değiştirin veya node'u silin. OpenAI/Claude/Gemini desteklenir!</li>
                     <li>Farklı user_id test etmek için URL'yi değiştirin: <code>/api/run?user_id=1</code></li>
                     <li>Console loglarını açın (F12) → SQL sorguları ve node çıktılarını görürsünüz</li>
                     <li>Node'ları drag & drop ile ekleyebilirsiniz</li>
@@ -395,6 +400,28 @@
                     </div>`;
                 data = { "query": "INSERT INTO audit_log (user_id, action, created_at) VALUES (?,?,datetime('now'))", "bind_fields": "user_id,action" };
             }
+            else if (name === 'ai') {
+                html = `
+                    <div class="node-box">
+                        ${headerHtml('🤖 AI Assistant')}
+                        <select df-provider>
+                            <option value="openai">OpenAI (ChatGPT)</option>
+                            <option value="anthropic">Anthropic (Claude)</option>
+                            <option value="gemini">Google (Gemini)</option>
+                        </select>
+                        <input type="text" df-model placeholder="Model (gpt-4, claude-3-sonnet, gemini-pro)">
+                        <input type="text" df-api_key placeholder="API Key (or env var)">
+                        <input type="text" df-prompt placeholder="Prompt: Analyze {{.user.name}} data">
+                        <input type="text" df-result_key placeholder="Result Key (default: ai_response)">
+                    </div>`;
+                data = {
+                    "provider": "openai",
+                    "model": "gpt-4",
+                    "api_key": "YOUR_API_KEY",
+                    "prompt": "Analyze the user: {{.user.name}}. Provide insights.",
+                    "result_key": "ai_response"
+                };
+            }
 
             return editor.addNode(name, inputs, outputs, pos_x, pos_y, name, data, html);
         }
@@ -437,34 +464,46 @@
             let n4 = addNodeToCanvas('progress', 1100, 100);
             editor.updateNodeDataFromId(n4, { "step_name": "✅ Kullanıcı Kaydı Başlatıldı", "progress": "10%" });
 
+            // AI Analysis (optional - needs API key)
+            let n4a = addNodeToCanvas('ai', 1450, 100);
+            editor.updateNodeDataFromId(n4a, {
+                "provider": "openai",
+                "model": "gpt-3.5-turbo",
+                "api_key": "sk-demo-key-replace-me",
+                "prompt": "User {{.user.name}} ({{.user.email}}) is onboarding. Department: {{.user.department}}. Analyze if they need special training. Reply with just: 'standard' or 'advanced'",
+                "result_key": "training_level",
+                "temperature": 0.3,
+                "max_tokens": 50
+            });
+
             // ROW 2: Wait & Document Upload Signal
-            let n5 = addNodeToCanvas('wait', 1450, 100);
+            let n5 = addNodeToCanvas('wait', 1800, 100);
             editor.updateNodeDataFromId(n5, { "duration": "3s" });
 
-            let n6 = addNodeToCanvas('signal', 1800, 100);
+            let n6 = addNodeToCanvas('signal', 2150, 100);
             editor.updateNodeDataFromId(n6, { "timeout": "14 days" });
 
-            let n7 = addNodeToCanvas('progress', 2150, 100);
+            let n7 = addNodeToCanvas('progress', 2500, 100);
             editor.updateNodeDataFromId(n7, { "step_name": "📄 Belgeler Yüklendi", "progress": "30%" });
 
             // ROW 3: HTTP API Check & Admin Approval Signal
-            let n8 = addNodeToCanvas('http', 50, 300);
+            let n8 = addNodeToCanvas('http', 50, 350);
             editor.updateNodeDataFromId(n8, {
                 "url": "https://jsonplaceholder.typicode.com/users/1",
                 "method": "GET"
             });
 
-            let n9 = addNodeToCanvas('log', 400, 300);
+            let n9 = addNodeToCanvas('log', 400, 350);
             editor.updateNodeDataFromId(n9, { "message": "📡 Dış API Doğrulaması Yapıldı" });
 
-            let n10 = addNodeToCanvas('signal', 750, 300);
+            let n10 = addNodeToCanvas('signal', 750, 350);
             editor.updateNodeDataFromId(n10, { "timeout": "48h" });
 
-            let n11 = addNodeToCanvas('progress', 1100, 300);
+            let n11 = addNodeToCanvas('progress', 1100, 350);
             editor.updateNodeDataFromId(n11, { "step_name": "⏳ Admin Onayı Bekleniyor", "progress": "50%" });
 
             // ROW 4: Condition Branch
-            let n12 = addNodeToCanvas('condition', 1450, 300);
+            let n12 = addNodeToCanvas('condition', 1450, 350);
             editor.updateNodeDataFromId(n12, {
                 "variable": "status",
                 "operator": "==",
@@ -504,11 +543,12 @@
             editor.updateNodeDataFromId(f3, { "step_name": "⛔ Hesap Askıya Alındı", "progress": "0%" });
 
             // ========== CONNECTIONS ==========
-            // Row 1 (User Fetch Flow)
+            // Row 1 (User Fetch Flow with AI)
             editor.addConnection(n1, n2, "output_1", "input_1");
             editor.addConnection(n2, n3, "output_1", "input_1");
             editor.addConnection(n3, n4, "output_1", "input_1");
-            editor.addConnection(n4, n5, "output_1", "input_1");
+            editor.addConnection(n4, n4a, "output_1", "input_1");
+            editor.addConnection(n4a, n5, "output_1", "input_1");
             editor.addConnection(n5, n6, "output_1", "input_1");
             editor.addConnection(n6, n7, "output_1", "input_1");
 

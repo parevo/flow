@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"text/template"
 	"time"
 )
 
@@ -47,7 +46,7 @@ func (n *NotifyNode) Execute(_ context.Context, config map[string]interface{}, i
 	}
 
 	// Render URL template
-	renderedURL, err := renderTemplate("notify_url", urlTmpl, inMap)
+	renderedURL, err := renderTemplateNamed("notify_url", urlTmpl, inMap)
 	if err != nil {
 		return "", fmt.Errorf("notify: url template error: %w", err)
 	}
@@ -55,7 +54,7 @@ func (n *NotifyNode) Execute(_ context.Context, config map[string]interface{}, i
 	// Render body template (or fall through to raw input)
 	requestBody := input
 	if bodyTmpl, ok := config["body"].(string); ok && bodyTmpl != "" {
-		requestBody, err = renderTemplate("notify_body", bodyTmpl, inMap)
+		requestBody, err = renderTemplateNamed("notify_body", bodyTmpl, inMap)
 		if err != nil {
 			return "", fmt.Errorf("notify: body template error: %w", err)
 		}
@@ -93,17 +92,4 @@ func (n *NotifyNode) Validate(config map[string]interface{}) error {
 		return fmt.Errorf("notify: missing 'url' in config")
 	}
 	return nil
-}
-
-// renderTemplate is a shared helper for Go template rendering.
-func renderTemplate(name, tmplStr string, data interface{}) (string, error) {
-	t, err := template.New(name).Parse(tmplStr)
-	if err != nil {
-		return "", err
-	}
-	var buf bytes.Buffer
-	if err := t.Execute(&buf, data); err != nil {
-		return "", err
-	}
-	return buf.String(), nil
 }

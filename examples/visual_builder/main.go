@@ -356,6 +356,7 @@ func main() {
 	registry.Register("transform", &node.TransformNode{})
 	registry.Register("notify", node.NewNotifyNode())
 	registry.Register("log_node", node.NewLogNode())
+	registry.Register("ai", &node.AINode{})
 
 	// DB nodes
 	registry.Register("db_query", &DBQueryNode{db: sharedDB})
