@@ -37,9 +37,9 @@ Parevo Flow is a production-ready, DAG-based workflow orchestration engine that 
 
 ```bash
 go get github.com/parevo/flow
-go get github.com/go-sql-driver/mysql
-go get github.com/jmoiron/sqlx
 ```
+
+**That's it!** All dependencies (MySQL driver, PostgreSQL driver, Redis client, etc.) are automatically installed.
 
 ### Complete Working Example (5 Minutes)
 
@@ -51,8 +51,8 @@ import (
     "log"
     
     "github.com/parevo/flow"
-    _ "github.com/go-sql-driver/mysql"
-    "github.com/jmoiron/sqlx"
+    _ "github.com/go-sql-driver/mysql"  // MySQL driver (auto-installed)
+    "github.com/jmoiron/sqlx"           // SQL extensions (auto-installed)
 )
 
 func main() {

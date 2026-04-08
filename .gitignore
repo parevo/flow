@@ -1,0 +1,6 @@
+
+# Test artifacts
+coverage.out
+coverage.html
+benchmark.txt
+*.test
