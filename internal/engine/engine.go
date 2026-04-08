@@ -161,6 +161,28 @@ func (e *Engine) CancelExecution(ctx context.Context, namespace string, execID s
 	return e.storage.UpdateExecution(ctx, namespace, exec)
 }
 
+func (e *Engine) SignalExecution(ctx context.Context, namespace string, execID string, nodeID string, output string) error {
+	steps, err := e.storage.GetExecutionSteps(ctx, namespace, execID)
+	if err != nil {
+		return err
+	}
+
+	var targetStep *models.ExecutionStep
+	for _, s := range steps {
+		if s.NodeID == nodeID && s.Status == models.TaskWaiting {
+			targetStep = s
+			break
+		}
+	}
+
+	if targetStep == nil {
+		return fmt.Errorf("no WAITING step found for node %s in execution %s", nodeID, execID)
+	}
+
+	e.logger.Info("Signaling execution resume", "execution", execID, "node", nodeID)
+	return e.CompleteStep(ctx, targetStep, output)
+}
+
 func (e *Engine) GetExecutionStatus(ctx context.Context, namespace string, execID string) (*models.Execution, error) {
 	return e.storage.GetExecution(ctx, namespace, execID)
 }

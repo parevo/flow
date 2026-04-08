@@ -85,6 +85,14 @@ func (w *Worker) processOne(ctx context.Context) {
 
 	output, err := w.executeStep(ctx, step)
 	if err != nil {
+		// Native Signal Support: Check for SIGNAL_WAIT
+		if err.Error() == "SIGNAL_WAIT" {
+			w.engine.logger.Info("Step entering WAITING state for external signal", "worker", w.id, "step", step.ID, "node", step.NodeID)
+			step.Status = models.TaskWaiting
+			w.engine.storage.UpdateExecutionStep(ctx, step.Namespace, step)
+			return
+		}
+
 		w.engine.logger.Error("Step execution failed", "worker", w.id, "step", step.ID, "attempt", step.AttemptNumber, "error", err)
 		
 		// Find Node to get its RetryPolicy

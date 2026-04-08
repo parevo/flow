@@ -95,6 +95,30 @@ func (m *APIManager) handleManagementAPI(w http.ResponseWriter, r *http.Request,
 			w.Write([]byte(`{"status":"cancelled"}`))
 			return
 		}
+		if len(parts) == 6 && parts[4] == "signal" {
+			// Signal Execution (Resume)
+			execID := parts[3]
+			nodeID := parts[5]
+			if r.Method != http.MethodPost {
+				http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+				return
+			}
+			var body struct {
+				Output string `json:"output"`
+			}
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				http.Error(w, "Invalid body", http.StatusBadRequest)
+				return
+			}
+			err := m.webhookMgr.engine.SignalExecution(r.Context(), namespace, execID, nodeID, body.Output)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte(`{"status":"signaled"}`))
+			return
+		}
 	}
 
 	http.NotFound(w, r)
