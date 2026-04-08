@@ -1230,6 +1230,377 @@ func BenchmarkRegistryFunctionCall(b *testing.B) {
 	}
 }
 
+// ==================== AUTH TESTS ====================
+
+// Context key types to avoid collisions
+type testContextKey string
+
+const (
+	testCustomerIDKey testContextKey = "customer_id"
+	testUserIDKey     testContextKey = "user_id"
+	testRoleKey       testContextKey = "role"
+	testTeamsKey      testContextKey = "teams"
+)
+
+// Mock auth provider for testing
+type TestAuthProvider struct {
+	workflows map[string]map[string]interface{} // workflow_id -> metadata
+}
+
+func NewTestAuthProvider() *TestAuthProvider {
+	return &TestAuthProvider{
+		workflows: make(map[string]map[string]interface{}),
+	}
+}
+
+func (a *TestAuthProvider) CheckAccess(ctx context.Context, resource string, action string) error {
+	// Get auth info from context
+	customerID, _ := ctx.Value(testCustomerIDKey).(string)
+	userID, _ := ctx.Value(testUserIDKey).(string)
+	role, _ := ctx.Value(testRoleKey).(string)
+
+	if customerID == "" || userID == "" {
+		return fmt.Errorf("unauthorized: missing auth context")
+	}
+
+	// For simplicity, extract workflow_id from resource
+	workflowID := resource
+	if len(resource) > 9 && resource[:9] == "workflow:" {
+		workflowID = resource[9:]
+	}
+
+	// Get workflow metadata
+	meta, exists := a.workflows[workflowID]
+	if !exists && action != "create" {
+		return fmt.Errorf("workflow not found")
+	}
+
+	// For create action, allow if context is valid
+	if action == "create" {
+		return nil
+	}
+
+	// CRITICAL: Multi-tenant isolation
+	if meta["customer_id"] != customerID {
+		return fmt.Errorf("forbidden: customer mismatch")
+	}
+
+	// Admin can do anything
+	if role == "admin" {
+		return nil
+	}
+
+	// Owner can do anything
+	if meta["owner_id"] == userID {
+		return nil
+	}
+
+	// Check visibility
+	visibility, _ := meta["visibility"].(string)
+	switch visibility {
+	case "organization":
+		// Everyone in org can view/execute
+		if action == "execute" || action == "view" {
+			return nil
+		}
+	case "team":
+		// Check team membership
+		teamID, _ := meta["team_id"].(string)
+		userTeams, _ := ctx.Value(testTeamsKey).([]string)
+		for _, t := range userTeams {
+			if t == teamID {
+				if action == "execute" || action == "view" {
+					return nil
+				}
+			}
+		}
+	}
+
+	return fmt.Errorf("forbidden: insufficient permissions")
+}
+
+func (a *TestAuthProvider) RegisterWorkflow(workflowID string, meta map[string]interface{}) {
+	a.workflows[workflowID] = meta
+}
+
+func TestAuthMultiTenant(t *testing.T) {
+	storage := flow.NewMemoryStorage()
+	registry := flow.NewRegistry()
+	engine := flow.NewEngine(storage, registry)
+
+	// Setup auth provider
+	authProvider := NewTestAuthProvider()
+	engine.SetAuthProvider(authProvider)
+
+	ctx := context.Background()
+
+	// Customer A - User 1 creates workflow
+	ctxA1 := context.WithValue(ctx, testCustomerIDKey, "customer-a")
+	ctxA1 = context.WithValue(ctxA1, testUserIDKey, "user-a1")
+	ctxA1 = context.WithValue(ctxA1, testRoleKey, "user")
+
+	wfA := &flow.Workflow{
+		ID:      "workflow-a",
+		Name:    "Customer A Workflow",
+		Version: 1,
+		Nodes:   []flow.Node{{ID: "task", Type: "function", Config: map[string]interface{}{"function": "test"}}},
+		Metadata: map[string]interface{}{
+			"customer_id": "customer-a",
+			"owner_id":    "user-a1",
+			"visibility":  "organization",
+		},
+	}
+
+	registry.RegisterFunction("test", func(ctx context.Context, input map[string]interface{}) (map[string]interface{}, error) {
+		return map[string]interface{}{"done": true}, nil
+	})
+
+	// Register workflow metadata in auth provider
+	authProvider.RegisterWorkflow("default:workflow-a", wfA.Metadata)
+
+	err := engine.RegisterWorkflow(ctxA1, "default", wfA)
+	if err != nil {
+		t.Fatalf("Customer A should be able to create workflow: %v", err)
+	}
+
+	// Customer A - User 2 (same org) tries to execute - should succeed
+	ctxA2 := context.WithValue(ctx, testCustomerIDKey, "customer-a")
+	ctxA2 = context.WithValue(ctxA2, testUserIDKey, "user-a2")
+	ctxA2 = context.WithValue(ctxA2, testRoleKey, "user")
+
+	authProvider.RegisterWorkflow("default:workflow-a", wfA.Metadata)
+	_, err = engine.Execute(ctxA2, "default", "workflow-a", []byte(`{}`))
+	if err != nil {
+		t.Fatalf("Customer A user 2 should be able to execute: %v", err)
+	}
+
+	// Customer B tries to execute - should FAIL (tenant isolation)
+	ctxB := context.WithValue(ctx, testCustomerIDKey, "customer-b")
+	ctxB = context.WithValue(ctxB, testUserIDKey, "user-b1")
+	ctxB = context.WithValue(ctxB, testRoleKey, "admin") // Even admin of different customer
+
+	_, err = engine.Execute(ctxB, "default", "workflow-a", []byte(`{}`))
+	if err == nil {
+		t.Fatal("SECURITY ISSUE: Customer B should NOT be able to access Customer A's workflow")
+	}
+
+	t.Log("✅ Multi-tenant isolation working correctly")
+}
+
+func TestAuthRoles(t *testing.T) {
+	storage := flow.NewMemoryStorage()
+	registry := flow.NewRegistry()
+	engine := flow.NewEngine(storage, registry)
+
+	authProvider := NewTestAuthProvider()
+	engine.SetAuthProvider(authProvider)
+
+	registry.RegisterFunction("test", func(ctx context.Context, input map[string]interface{}) (map[string]interface{}, error) {
+		return map[string]interface{}{"done": true}, nil
+	})
+
+	ctx := context.Background()
+
+	// Owner creates private workflow
+	ctxOwner := context.WithValue(ctx, testCustomerIDKey, "acme-corp")
+	ctxOwner = context.WithValue(ctxOwner, testUserIDKey, "owner-123")
+	ctxOwner = context.WithValue(ctxOwner, testRoleKey, "user")
+
+	wf := &flow.Workflow{
+		ID:      "private-wf",
+		Name:    "Private Workflow",
+		Version: 1,
+		Nodes:   []flow.Node{{ID: "task", Type: "function", Config: map[string]interface{}{"function": "test"}}},
+		Metadata: map[string]interface{}{
+			"customer_id": "acme-corp",
+			"owner_id":    "owner-123",
+			"visibility":  "private",
+		},
+	}
+
+	authProvider.RegisterWorkflow("default:private-wf", wf.Metadata)
+	err := engine.RegisterWorkflow(ctxOwner, "default", wf)
+	if err != nil {
+		t.Fatalf("Owner should create workflow: %v", err)
+	}
+
+	// Owner can execute
+	_, err = engine.Execute(ctxOwner, "default", "private-wf", []byte(`{}`))
+	if err != nil {
+		t.Fatalf("Owner should execute: %v", err)
+	}
+
+	// Admin (same customer) can execute
+	ctxAdmin := context.WithValue(ctx, testCustomerIDKey, "acme-corp")
+	ctxAdmin = context.WithValue(ctxAdmin, testUserIDKey, "admin-456")
+	ctxAdmin = context.WithValue(ctxAdmin, testRoleKey, "admin")
+
+	_, err = engine.Execute(ctxAdmin, "default", "private-wf", []byte(`{}`))
+	if err != nil {
+		t.Fatalf("Admin should execute: %v", err)
+	}
+
+	// Regular user (same customer) CANNOT execute private workflow
+	ctxUser := context.WithValue(ctx, testCustomerIDKey, "acme-corp")
+	ctxUser = context.WithValue(ctxUser, testUserIDKey, "user-789")
+	ctxUser = context.WithValue(ctxUser, testRoleKey, "user")
+
+	_, err = engine.Execute(ctxUser, "default", "private-wf", []byte(`{}`))
+	if err == nil {
+		t.Fatal("Regular user should NOT execute private workflow")
+	}
+
+	t.Log("✅ Role-based access control working")
+}
+
+func TestAuthTeamVisibility(t *testing.T) {
+	storage := flow.NewMemoryStorage()
+	registry := flow.NewRegistry()
+	engine := flow.NewEngine(storage, registry)
+
+	authProvider := NewTestAuthProvider()
+	engine.SetAuthProvider(authProvider)
+
+	registry.RegisterFunction("test", func(ctx context.Context, input map[string]interface{}) (map[string]interface{}, error) {
+		return map[string]interface{}{"done": true}, nil
+	})
+
+	ctx := context.Background()
+
+	// Create team workflow
+	ctxOwner := context.WithValue(ctx, testCustomerIDKey, "acme-corp")
+	ctxOwner = context.WithValue(ctxOwner, testUserIDKey, "owner-123")
+	ctxOwner = context.WithValue(ctxOwner, testRoleKey, "user")
+	ctxOwner = context.WithValue(ctxOwner, testTeamsKey, []string{"eng-team"})
+
+	wf := &flow.Workflow{
+		ID:      "team-wf",
+		Name:    "Team Workflow",
+		Version: 1,
+		Nodes:   []flow.Node{{ID: "task", Type: "function", Config: map[string]interface{}{"function": "test"}}},
+		Metadata: map[string]interface{}{
+			"customer_id": "acme-corp",
+			"owner_id":    "owner-123",
+			"visibility":  "team",
+			"team_id":     "eng-team",
+		},
+	}
+
+	authProvider.RegisterWorkflow("default:team-wf", wf.Metadata)
+	err := engine.RegisterWorkflow(ctxOwner, "default", wf)
+	if err != nil {
+		t.Fatalf("Owner should create workflow: %v", err)
+	}
+
+	// Team member can execute
+	ctxTeamMember := context.WithValue(ctx, testCustomerIDKey, "acme-corp")
+	ctxTeamMember = context.WithValue(ctxTeamMember, testUserIDKey, "member-456")
+	ctxTeamMember = context.WithValue(ctxTeamMember, testRoleKey, "user")
+	ctxTeamMember = context.WithValue(ctxTeamMember, testTeamsKey, []string{"eng-team", "ops-team"})
+
+	_, err = engine.Execute(ctxTeamMember, "default", "team-wf", []byte(`{}`))
+	if err != nil {
+		t.Fatalf("Team member should execute: %v", err)
+	}
+
+	// Non-team member (same customer) CANNOT execute
+	ctxNonMember := context.WithValue(ctx, testCustomerIDKey, "acme-corp")
+	ctxNonMember = context.WithValue(ctxNonMember, testUserIDKey, "other-789")
+	ctxNonMember = context.WithValue(ctxNonMember, testRoleKey, "user")
+	ctxNonMember = context.WithValue(ctxNonMember, testTeamsKey, []string{"sales-team"})
+
+	_, err = engine.Execute(ctxNonMember, "default", "team-wf", []byte(`{}`))
+	if err == nil {
+		t.Fatal("Non-team member should NOT execute team workflow")
+	}
+
+	t.Log("✅ Team-based visibility working")
+}
+
+func TestAuthOrganizationVisibility(t *testing.T) {
+	storage := flow.NewMemoryStorage()
+	registry := flow.NewRegistry()
+	engine := flow.NewEngine(storage, registry)
+
+	authProvider := NewTestAuthProvider()
+	engine.SetAuthProvider(authProvider)
+
+	registry.RegisterFunction("test", func(ctx context.Context, input map[string]interface{}) (map[string]interface{}, error) {
+		return map[string]interface{}{"done": true}, nil
+	})
+
+	ctx := context.Background()
+
+	// Create organization-wide workflow
+	ctxOwner := context.WithValue(ctx, testCustomerIDKey, "acme-corp")
+	ctxOwner = context.WithValue(ctxOwner, testUserIDKey, "owner-123")
+	ctxOwner = context.WithValue(ctxOwner, testRoleKey, "user")
+
+	wf := &flow.Workflow{
+		ID:      "org-wf",
+		Name:    "Organization Workflow",
+		Version: 1,
+		Nodes:   []flow.Node{{ID: "task", Type: "function", Config: map[string]interface{}{"function": "test"}}},
+		Metadata: map[string]interface{}{
+			"customer_id": "acme-corp",
+			"owner_id":    "owner-123",
+			"visibility":  "organization",
+		},
+	}
+
+	authProvider.RegisterWorkflow("default:org-wf", wf.Metadata)
+	err := engine.RegisterWorkflow(ctxOwner, "default", wf)
+	if err != nil {
+		t.Fatalf("Owner should create workflow: %v", err)
+	}
+
+	// Any user in organization can execute
+	ctxAnyUser := context.WithValue(ctx, testCustomerIDKey, "acme-corp")
+	ctxAnyUser = context.WithValue(ctxAnyUser, testUserIDKey, "random-user-999")
+	ctxAnyUser = context.WithValue(ctxAnyUser, testRoleKey, "user")
+
+	_, err = engine.Execute(ctxAnyUser, "default", "org-wf", []byte(`{}`))
+	if err != nil {
+		t.Fatalf("Any org user should execute: %v", err)
+	}
+
+	t.Log("✅ Organization visibility working")
+}
+
+func TestAuthNoProvider(t *testing.T) {
+	storage := flow.NewMemoryStorage()
+	registry := flow.NewRegistry()
+	engine := flow.NewEngine(storage, registry)
+
+	// No auth provider set - should allow everything
+
+	registry.RegisterFunction("test", func(ctx context.Context, input map[string]interface{}) (map[string]interface{}, error) {
+		return map[string]interface{}{"done": true}, nil
+	})
+
+	ctx := context.Background()
+
+	wf := &flow.Workflow{
+		ID:      "no-auth-wf",
+		Name:    "No Auth Workflow",
+		Version: 1,
+		Nodes:   []flow.Node{{ID: "task", Type: "function", Config: map[string]interface{}{"function": "test"}}},
+	}
+
+	// Should work without any auth context
+	err := engine.RegisterWorkflow(ctx, "default", wf)
+	if err != nil {
+		t.Fatalf("Should work without auth provider: %v", err)
+	}
+
+	_, err = engine.Execute(ctx, "default", "no-auth-wf", []byte(`{}`))
+	if err != nil {
+		t.Fatalf("Should execute without auth provider: %v", err)
+	}
+
+	t.Log("✅ No auth provider - everything allowed")
+}
+
 func BenchmarkBuilderAPI(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {

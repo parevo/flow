@@ -31,9 +31,10 @@ type Workflow struct {
 	Description string            `json:"description" db:"description"`
 	Version     int               `json:"version" db:"version"`
 	Status      WorkflowStatus    `json:"status" db:"status"`
-	Nodes       []Node            `json:"nodes" db:"-"` // Handled separately or as JSON
-	Edges       []Edge            `json:"edges" db:"-"` // Handled separately or as JSON
-	Labels      map[string]string `json:"labels" db:"-"` // Stored in JSON definition
+	Nodes       []Node            `json:"nodes" db:"-"`                  // Handled separately or as JSON
+	Edges       []Edge            `json:"edges" db:"-"`                  // Handled separately or as JSON
+	Labels      map[string]string `json:"labels" db:"-"`                 // Stored in JSON definition
+	Metadata    map[string]interface{} `json:"metadata,omitempty" db:"-"` // Flexible field for auth/custom data (user_id, tenant_id, owner, etc.)
 	CreatedAt   time.Time         `json:"createdAt" db:"created_at"`
 	UpdatedAt   time.Time         `json:"updatedAt" db:"updated_at"`
 }
@@ -67,17 +68,18 @@ type Edge struct {
 
 // Execution represents a single run instance of a workflow
 type Execution struct {
-	ID           string            `json:"id" db:"id"`
-	Namespace    string            `json:"namespace" db:"namespace"`
-	WorkflowID   string            `json:"workflowId" db:"workflow_id"`
-	Version      int               `json:"version" db:"version"`
-	Status       TaskStatus        `json:"status" db:"status"`
-	Input        string            `json:"input" db:"input"`
-	Output       string            `json:"output" db:"output"`
-	ErrorMessage string            `json:"errorMessage,omitempty" db:"error_message"`
-	Labels       map[string]string `json:"labels" db:"-"` // Stored in JSON or separate column
-	StartedAt    time.Time         `json:"startedAt" db:"started_at"`
-	FinishedAt   *time.Time        `json:"finishedAt,omitempty" db:"finished_at"`
+	ID           string                 `json:"id" db:"id"`
+	Namespace    string                 `json:"namespace" db:"namespace"`
+	WorkflowID   string                 `json:"workflowId" db:"workflow_id"`
+	Version      int                    `json:"version" db:"version"`
+	Status       TaskStatus             `json:"status" db:"status"`
+	Input        string                 `json:"input" db:"input"`
+	Output       string                 `json:"output" db:"output"`
+	ErrorMessage string                 `json:"errorMessage,omitempty" db:"error_message"`
+	Labels       map[string]string      `json:"labels" db:"-"`                 // Stored in JSON or separate column
+	Metadata     map[string]interface{} `json:"metadata,omitempty" db:"-"`     // Flexible field for auth/custom data (user_id, tenant_id, etc.)
+	StartedAt    time.Time              `json:"startedAt" db:"started_at"`
+	FinishedAt   *time.Time             `json:"finishedAt,omitempty" db:"finished_at"`
 }
 
 // ExecutionStep represents the state of an individual node in an execution

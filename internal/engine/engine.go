@@ -9,15 +9,17 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/parevo/flow/internal/auth"
 	"github.com/parevo/flow/internal/models"
 	"github.com/parevo/flow/internal/storage"
 	"github.com/parevo/flow/internal/telemetry"
 )
 
 type Engine struct {
-	storage  storage.Storage
-	registry *Registry
-	logger   *slog.Logger
+	storage      storage.Storage
+	registry     *Registry
+	logger       *slog.Logger
+	authProvider auth.AuthProvider // Optional - if nil, no auth checks
 }
 
 func NewEngine(s storage.Storage, r *Registry) *Engine {
@@ -33,8 +35,23 @@ func (e *Engine) WithLogger(l *slog.Logger) *Engine {
 	return e
 }
 
+// SetAuthProvider sets the auth provider for authorization checks
+// If not set, all operations are allowed (no auth)
+func (e *Engine) SetAuthProvider(provider auth.AuthProvider) *Engine {
+	e.authProvider = provider
+	return e
+}
+
 // StartWorkflow creates a new execution for a workflow
 func (e *Engine) StartWorkflow(ctx context.Context, namespace, workflowID string, input string) (string, error) {
+	// Check auth if provider is set
+	if e.authProvider != nil {
+		resource := fmt.Sprintf("workflow:%s:%s", namespace, workflowID)
+		if err := e.authProvider.CheckAccess(ctx, resource, "execute"); err != nil {
+			return "", fmt.Errorf("access denied: %w", err)
+		}
+	}
+
 	wf, err := e.storage.GetWorkflow(ctx, namespace, workflowID)
 	if err != nil {
 		return "", fmt.Errorf("failed to get workflow: %w", err)
@@ -416,6 +433,14 @@ func (e *Engine) GetLogger() *slog.Logger {
 
 // RegisterWorkflow saves a workflow definition to storage
 func (e *Engine) RegisterWorkflow(ctx context.Context, namespace string, wf *models.Workflow) error {
+	// Check auth if provider is set
+	if e.authProvider != nil {
+		resource := fmt.Sprintf("workflow:%s:%s", namespace, wf.ID)
+		if err := e.authProvider.CheckAccess(ctx, resource, "create"); err != nil {
+			return fmt.Errorf("access denied: %w", err)
+		}
+	}
+
 	wf.Namespace = namespace
 	wf.Status = models.WorkflowActive
 	wf.CreatedAt = time.Now()

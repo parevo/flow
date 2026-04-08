@@ -236,6 +236,141 @@ Event types:
 - `EventStepCompleted`
 - `EventStepFailed`
 
+## Authorization
+
+Parevo Flow provides a flexible, pluggable authorization system. Bring your own auth!
+
+### Interface
+
+```go
+type AuthProvider interface {
+    CheckAccess(ctx context.Context, resource string, action string) error
+}
+```
+
+### Usage
+
+#### 1. No Auth (Development)
+
+```go
+engine := flow.NewEngine(storage, registry)
+// No auth provider set - everything is allowed
+```
+
+#### 2. Simple Custom Auth
+
+```go
+type MyAuth struct{}
+
+func (a *MyAuth) CheckAccess(ctx context.Context, resource string, action string) error {
+    userID := ctx.Value("user_id").(string)
+    
+    // Your custom logic
+    if userID == "" {
+        return errors.New("unauthorized")
+    }
+    
+    // Check permissions in your database, Firebase, Auth0, etc.
+    return nil
+}
+
+// Set auth provider
+engine := flow.NewEngine(storage, registry)
+engine.SetAuthProvider(&MyAuth{})
+```
+
+#### 3. Multi-Tenant with Customer Isolation
+
+```go
+type MultiTenantAuth struct{}
+
+func (a *MultiTenantAuth) CheckAccess(ctx context.Context, resource string, action string) error {
+    customerID := ctx.Value("customer_id").(string)
+    userID := ctx.Value("user_id").(string)
+    role := ctx.Value("role").(string)
+    
+    // Get workflow metadata
+    workflow := getWorkflowFromDB(resource)
+    
+    // CRITICAL: Tenant isolation
+    if workflow.Metadata["customer_id"] != customerID {
+        return errors.New("forbidden: wrong tenant")
+    }
+    
+    // Admin can do anything
+    if role == "admin" {
+        return nil
+    }
+    
+    // Owner can do anything
+    if workflow.Metadata["owner_id"] == userID {
+        return nil
+    }
+    
+    // Check visibility
+    if workflow.Metadata["visibility"] == "organization" {
+        if action == "view" || action == "execute" {
+            return nil
+        }
+    }
+    
+    return errors.New("forbidden")
+}
+
+engine.SetAuthProvider(&MultiTenantAuth{})
+```
+
+#### 4. Store Auth Metadata in Workflows
+
+```go
+wf := &flow.Workflow{
+    ID:   "my-workflow",
+    Name: "My Workflow",
+    Metadata: map[string]interface{}{
+        // Use ANY field names you want - we don't enforce structure
+        "customer_id": "acme-corp",     // Multi-tenant isolation
+        "user_id":     "user-123",      // Owner
+        "owner":       "john@acme.com", // Email-based
+        "slug":        "acme/my-wf",    // Slug-based
+        "team_id":     "eng-team",      // Team access
+        "visibility":  "organization",  // Visibility level
+        
+        // Or use your own auth system fields
+        "firebase_uid": "abc123",
+        "auth0_org":    "org_xyz",
+    },
+}
+
+// Add auth context when registering
+ctx = context.WithValue(ctx, "customer_id", "acme-corp")
+ctx = context.WithValue(ctx, "user_id", "user-123")
+engine.RegisterWorkflow(ctx, "default", wf)
+```
+
+### Actions
+
+Common actions (you can define your own):
+- `"create"` - Create/register workflow
+- `"view"` - View workflow definition
+- `"execute"` - Trigger execution
+- `"edit"` - Modify workflow
+- `"delete"` - Delete workflow
+
+### Key Principles
+
+1. **Fully pluggable** - Use any auth system (Firebase, Auth0, custom DB, etc.)
+2. **No prescribed structure** - Use `user_id`, `userId`, `email`, `slug`, or whatever you want
+3. **Context-based** - Pass auth info via `context.Context`
+4. **Metadata is flexible** - Store any auth-related data in `workflow.Metadata`
+
+### Complete Example
+
+See `examples/auth/` for a full multi-tenant implementation with:
+- Customer/tenant isolation
+- Role-based access control (admin, user, viewer)
+- Team-based visibility
+- Organization-wide workflows
+
 ## Monitoring
 
 ### Prometheus Metrics

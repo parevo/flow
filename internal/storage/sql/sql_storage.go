@@ -106,6 +106,7 @@ CREATE TABLE IF NOT EXISTS workflows (
     status VARCHAR(50) NOT NULL,
     definition JSON NOT NULL,
     labels JSON,
+    metadata JSON,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     INDEX idx_wf_namespace (namespace)
@@ -120,6 +121,7 @@ CREATE TABLE IF NOT EXISTS executions (
     input JSON,
     output JSON,
     labels JSON,
+    metadata JSON,
     error_message TEXT,
     started_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     finished_at TIMESTAMP NULL,
@@ -160,6 +162,7 @@ CREATE TABLE IF NOT EXISTS workflows (
     status VARCHAR(50) NOT NULL,
     definition JSONB NOT NULL,
     labels JSONB,
+    metadata JSONB,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
@@ -174,6 +177,7 @@ CREATE TABLE IF NOT EXISTS executions (
     input JSONB,
     output JSONB,
     labels JSONB,
+    metadata JSONB,
     error_message TEXT,
     started_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     finished_at TIMESTAMP WITH TIME ZONE NULL
