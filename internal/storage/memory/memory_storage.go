@@ -14,6 +14,7 @@ type MemoryStorage struct {
 	workflows      map[string]*models.Workflow
 	executions     map[string]*models.Execution
 	executionSteps map[string]*models.ExecutionStep
+	ZombieThreshold time.Duration
 }
 
 func NewMemoryStorage() *MemoryStorage {
@@ -21,6 +22,7 @@ func NewMemoryStorage() *MemoryStorage {
 		workflows:      make(map[string]*models.Workflow),
 		executions:     make(map[string]*models.Execution),
 		executionSteps: make(map[string]*models.ExecutionStep),
+		ZombieThreshold: 5 * time.Minute,
 	}
 }
 
@@ -132,13 +134,18 @@ func (s *MemoryStorage) ClaimReadyStep(ctx context.Context, namespace string, wo
 	defer s.mu.Unlock()
 	now := time.Now()
 	for _, step := range s.executionSteps {
-		if step.Status == models.TaskPending {
+		isZombie := step.Status == models.TaskRunning && s.ZombieThreshold > 0 && time.Since(step.UpdatedAt) > s.ZombieThreshold
+		
+		if step.Status == models.TaskPending || isZombie {
 			if namespace == "" || step.Namespace == namespace {
-				if step.ScheduledAt == nil || step.ScheduledAt.Before(now) {
-					step.Status = models.TaskRunning
-					step.WorkerID = workerID
-					return step, nil
+				if step.Status == models.TaskPending && (step.ScheduledAt != nil && step.ScheduledAt.After(now)) {
+					continue
 				}
+				
+				step.Status = models.TaskRunning
+				step.WorkerID = workerID
+				step.UpdatedAt = now // Refresh heart-beat
+				return step, nil
 			}
 		}
 	}
