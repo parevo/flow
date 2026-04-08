@@ -1,30 +1,17 @@
 package engine
 
 import (
-	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promauto"
+	"fmt"
+	"sync/atomic"
 )
 
-var (
-	tasksProcessed = promauto.NewCounter(prometheus.CounterOpts{
-		Name: "parevo_flow_tasks_processed_total",
-		Help: "The total number of processed tasks",
-	})
-	tasksFailed = promauto.NewCounter(prometheus.CounterOpts{
-		Name: "parevo_flow_tasks_failed_total",
-		Help: "The total number of failed tasks",
-	})
-	tasksRetried = promauto.NewCounter(prometheus.CounterOpts{
-		Name: "parevo_flow_tasks_retried_total",
-		Help: "The total number of retried tasks",
-	})
-	activeWorkers = promauto.NewGauge(prometheus.GaugeOpts{
-		Name: "parevo_flow_active_workers",
-		Help: "The number of currently active workers",
-	})
-)
-
-type Telemetry struct{}
+// Zero-Dependency Telemetry using standard sync/atomic
+type Telemetry struct {
+	tasksProcessed uint64
+	tasksFailed    uint64
+	tasksRetried    uint64
+	activeWorkers  int64
+}
 
 var globalTelemetry = &Telemetry{}
 
@@ -33,31 +20,53 @@ func GetTelemetry() *Telemetry {
 }
 
 func (t *Telemetry) IncProcessed() {
-	tasksProcessed.Inc()
+	atomic.AddUint64(&t.tasksProcessed, 1)
 }
 
 func (t *Telemetry) IncFailed() {
-	tasksFailed.Inc()
+	atomic.AddUint64(&t.tasksFailed, 1)
 }
 
 func (t *Telemetry) IncRetried() {
-	tasksRetried.Inc()
+	atomic.AddUint64(&t.tasksRetried, 1)
 }
 
 func (t *Telemetry) WorkerStarted() {
-	activeWorkers.Inc()
+	atomic.AddInt64(&t.activeWorkers, 1)
 }
 
 func (t *Telemetry) WorkerStopped() {
-	activeWorkers.Dec()
+	atomic.AddInt64(&t.activeWorkers, -1)
+}
+
+// ToPrometheusFormat generates the metric string in Prometheus text format manually.
+// This allows us to avoid a heavy dependency on the Prometheus client library.
+func (t *Telemetry) ToPrometheusFormat() string {
+	return fmt.Sprintf(
+		"# HELP parevo_flow_tasks_processed_total The total number of processed tasks\n"+
+			"# TYPE parevo_flow_tasks_processed_total counter\n"+
+			"parevo_flow_tasks_processed_total %d\n"+
+			"# HELP parevo_flow_tasks_failed_total The total number of failed tasks\n"+
+			"# TYPE parevo_flow_tasks_failed_total counter\n"+
+			"parevo_flow_tasks_failed_total %d\n"+
+			"# HELP parevo_flow_tasks_retried_total The total number of retried tasks\n"+
+			"# TYPE parevo_flow_tasks_retried_total counter\n"+
+			"parevo_flow_tasks_retried_total %d\n"+
+			"# HELP parevo_flow_active_workers The number of currently active workers\n"+
+			"# TYPE parevo_flow_active_workers gauge\n"+
+			"parevo_flow_active_workers %d\n",
+		atomic.LoadUint64(&t.tasksProcessed),
+		atomic.LoadUint64(&t.tasksFailed),
+		atomic.LoadUint64(&t.tasksRetried),
+		atomic.LoadInt64(&t.activeWorkers),
+	)
 }
 
 func (t *Telemetry) GetStats() map[string]float64 {
-	// Note: In production, you'd use the Prometheus registry to get these.
-	// This helper exists for backward compatibility with our log-based metrics.
 	return map[string]float64{
-		"processed": 0, // Placeholder
-		"failed":    0,
-		"retried":   0,
+		"processed": float64(atomic.LoadUint64(&t.tasksProcessed)),
+		"failed":    float64(atomic.LoadUint64(&t.tasksFailed)),
+		"retried":   float64(atomic.LoadUint64(&t.tasksRetried)),
+		"workers":   float64(atomic.LoadInt64(&t.activeWorkers)),
 	}
 }

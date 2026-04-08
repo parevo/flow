@@ -2,7 +2,7 @@
 
 **A Lightweight, High-Performance, and Intelligent Workflow Engine in Go.**
 
-Parevo Flow is designed for modern SaaS architectures that require **extreme flexibility, enterprise-grade security, and intelligent decision-making** without the overhead of heavy infrastructure.
+Parevo Flow is designed for modern SaaS architectures that require **extreme flexibility, enterprise-grade security, and intelligent decision-making** with **ZERO external dependencies** for observability.
 
 ---
 
@@ -11,7 +11,7 @@ Parevo Flow is designed for modern SaaS architectures that require **extreme fle
 - **🧠 Intelligent Routing**: Built-in `ConditionNode` support for complex If-Else branching and decision trees.
 - **🛡️ Enterprise Security**: Optional **AES-256-GCM** encryption for all sensitive workflow data (PII protection).
 - **🏗️ Fluent Go Builder**: A type-safe, chainable DSL to build complex workflows directly in Go.
-- **📈 Real-time Observability**: Native **Prometheus** metrics integration for monitoring throughput, failures, and latency.
+- **📈 Native Observability**: **Zero-dependency Prometheus metrics** exporter. No external libraries, just pure high-performance atomic counters.
 - **⚡ Webhook & API Layer**: Trigger workflows via Webhooks and monitor them via a management REST API.
 - **💎 Architectural Purity**: Isolated `internal` logic with a centralized `tests/` directory.
 - **🚀 High-Load Ready**: Optimized with `SKIP LOCKED`, exponential backoff, and connection pool tuning.
@@ -21,7 +21,7 @@ Parevo Flow is designed for modern SaaS architectures that require **extreme fle
 
 ## 🏗️ Fluent Builder Example
 
-Build complex DAGs without touching raw JSON:
+Build complex DAGs with zero effort:
 
 ```go
 wf := builder.NewWorkflow("signup-flow", "User Signup")
@@ -35,9 +35,9 @@ wf := builder.NewWorkflow("signup-flow", "User Signup")
 
 ---
 
-## 📈 Monitoring (Prometheus)
+## 📉 Zero-Dependency Monitoring (Prometheus)
 
-Parevo Flow exposes industry-standard metrics at `/metrics`:
+Parevo Flow exposes native Prometheus metrics at `/metrics` using pure Go atomics. No external library overhead:
 - `parevo_flow_tasks_processed_total`: Total throughput.
 - `parevo_flow_tasks_failed_total`: Error rate tracking.
 - `parevo_flow_active_workers`: Current scale of your worker fleet.
@@ -59,12 +59,12 @@ sqlStore.SetEncryption(crypto) // All Input/Output data will be AES-256-GCM secu
 ```text
 .
 ├── internal/
-│   ├── builder/      # Fluent Go DSL (The Painter)
+│   ├── builder/      # Fluent Go DSL
 │   ├── engine/       # Core Orchestration (The Brain)
 │   ├── storage/      # Persistence & AES-Crypto (The Vault)
-│   ├── node/         # Logic Nodes (Wait, Condition, HTTP, etc.)
+│   ├── node/         # Logic Nodes (Wait, Condition, etc.)
 │   └── trigger/      # API, Webhooks & Metrics (The Interface)
-├── tests/            # Unified quality gate (Smoke & Integration)
+├── tests/            # Unified quality gate
 └── README.md         # This masterpiece
 ```
 
@@ -77,11 +77,8 @@ go get github.com/parevo/flow
 
 ---
 
-## 🤝 Contributing
-Contributions are welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for details.
-
 ## 📄 License
-Distributed under the **MIT License**. See `LICENSE` for more information.
+Distributed under the **MIT License**.
 
 ---
 **Parevo Flow** - *Built with ❤️ for the Gopher community by Ahmet Can Bilgay.*

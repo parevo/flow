@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/parevo/flow/internal/engine"
 )
 
 // APIManager handles management API requests
@@ -20,9 +20,10 @@ func NewAPIManager(wm *WebhookManager) *APIManager {
 func (m *APIManager) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	path := strings.Trim(r.URL.Path, "/")
 	
-	// 1. Prometheus Metrics
+	// 1. Prometheus Metrics (Zero-Dependency Implementation)
 	if path == "metrics" {
-		promhttp.Handler().ServeHTTP(w, r)
+		w.Header().Set("Content-Type", "text/plain; version=0.0.4")
+		w.Write([]byte(engine.GetTelemetry().ToPrometheusFormat()))
 		return
 	}
 
