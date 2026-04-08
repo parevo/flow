@@ -49,7 +49,7 @@ func (m *WebhookManager) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{
+	_ = json.NewEncoder(w).Encode(map[string]string{
 		"executionId": execID,
 		"status":      "started",
 	})

@@ -35,7 +35,7 @@ func (n *LogNode) Execute(_ context.Context, config map[string]interface{}, inpu
 
 	// Parse input for structured context
 	var inMap map[string]interface{}
-	_ = json.Unmarshal([]byte(input), &inMap)
+	json.Unmarshal([]byte(input), &inMap)
 
 	// Build slog args
 	args := []interface{}{"input", inMap}

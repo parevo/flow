@@ -45,24 +45,32 @@ func (n *ConditionNode) Execute(ctx context.Context, config map[string]interface
 		result = aStr != bStr
 	case ">":
 		var a, b float64
-		fmt.Sscanf(aStr, "%f", &a)
-		fmt.Sscanf(bStr, "%f", &b)
-		result = a > b
+		_, errA := fmt.Sscanf(aStr, "%f", &a)
+		_, errB := fmt.Sscanf(bStr, "%f", &b)
+		if errA == nil && errB == nil {
+			result = a > b
+		}
 	case "<":
 		var a, b float64
-		fmt.Sscanf(aStr, "%f", &a)
-		fmt.Sscanf(bStr, "%f", &b)
-		result = a < b
+		_, errA := fmt.Sscanf(aStr, "%f", &a)
+		_, errB := fmt.Sscanf(bStr, "%f", &b)
+		if errA == nil && errB == nil {
+			result = a < b
+		}
 	case ">=":
 		var a, b float64
-		fmt.Sscanf(aStr, "%f", &a)
-		fmt.Sscanf(bStr, "%f", &b)
-		result = a >= b
+		_, errA := fmt.Sscanf(aStr, "%f", &a)
+		_, errB := fmt.Sscanf(bStr, "%f", &b)
+		if errA == nil && errB == nil {
+			result = a >= b
+		}
 	case "<=":
 		var a, b float64
-		fmt.Sscanf(aStr, "%f", &a)
-		fmt.Sscanf(bStr, "%f", &b)
-		result = a <= b
+		_, errA := fmt.Sscanf(aStr, "%f", &a)
+		_, errB := fmt.Sscanf(bStr, "%f", &b)
+		if errA == nil && errB == nil {
+			result = a <= b
+		}
 	case "contains":
 		result = strings.Contains(aStr, bStr)
 	case "not_contains":
@@ -90,9 +98,7 @@ func buildCondOutput(inMap map[string]interface{}, branch string) string {
 	return string(b)
 }
 
-func containsStr(a, b string) bool {
-	return strings.Contains(a, b)
-}
+
 
 func (n *ConditionNode) Validate(config map[string]interface{}) error {
 	if _, ok := config["variable"].(string); !ok {

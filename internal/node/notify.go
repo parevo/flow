@@ -40,7 +40,7 @@ func (n *NotifyNode) Execute(_ context.Context, config map[string]interface{}, i
 
 	// Parse input as template data
 	var inMap map[string]interface{}
-	_ = json.Unmarshal([]byte(input), &inMap)
+	json.Unmarshal([]byte(input), &inMap)
 	if inMap == nil {
 		inMap = map[string]interface{}{}
 	}

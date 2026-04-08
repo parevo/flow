@@ -81,7 +81,7 @@ func (g *Graph) Validate() error {
 // GetInitialNodes returns nodes with no predecessors
 func (g *Graph) GetInitialNodes() []string {
 	ids := []string{}
-	
+
 	// Find all nodes that are referenced as a CompensateNodeID
 	compensations := make(map[string]bool)
 	for _, node := range g.Nodes {
@@ -110,11 +110,11 @@ func (g *Graph) GetNextNodes(nodeID string) []string {
 // GetNextNodesWithBranch returns children based on output branch (intelligent routing)
 func (g *Graph) GetNextNodesWithBranch(nodeID string, output string) []string {
 	var ids []string
-	
+
 	// Parse output to see if it specifies a branch
 	var outMap map[string]interface{}
-	_ = json.Unmarshal([]byte(output), &outMap)
-	
+	json.Unmarshal([]byte(output), &outMap)
+
 	branch, hasBranch := outMap["branch"].(string)
 
 	for _, edge := range g.Edges[nodeID] {

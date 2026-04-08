@@ -53,7 +53,9 @@ func (r *RedisStorage) GetWorkflow(ctx context.Context, namespace string, id str
 		return nil, err
 	}
 	var wf models.Workflow
-	json.Unmarshal(data, &wf)
+	if err := json.Unmarshal(data, &wf); err != nil {
+		return nil, err
+	}
 	return &wf, nil
 }
 
@@ -86,7 +88,9 @@ func (r *RedisStorage) GetExecution(ctx context.Context, namespace string, id st
 		return nil, err
 	}
 	var exec models.Execution
-	json.Unmarshal(data, &exec)
+	if err := json.Unmarshal(data, &exec); err != nil {
+		return nil, err
+	}
 	return &exec, nil
 }
 
@@ -169,7 +173,7 @@ func (r *RedisStorage) ClaimReadyStep(ctx context.Context, namespace string, wor
 	// We check for ready steps (score <= now)
 	now := time.Now().Unix()
 	pendingSetKey := pendingSet(namespace)
-	
+
 	// LUA Script: Try to fetch one eligible step, remove it from ZSET, and return its ID
 	script := `
 		local steps = redis.call('ZRANGEBYSCORE', KEYS[1], '-inf', ARGV[1], 'LIMIT', 0, 1)
@@ -179,7 +183,7 @@ func (r *RedisStorage) ClaimReadyStep(ctx context.Context, namespace string, wor
 		end
 		return nil
 	`
-	
+
 	res, err := r.client.Eval(ctx, script, []string{pendingSetKey}, now).Result()
 	if err == redis.Nil || err != nil {
 		return nil, nil
@@ -213,6 +217,8 @@ func (r *RedisStorage) GetExecutionStepByID(ctx context.Context, namespace strin
 		return nil, err
 	}
 	var step models.ExecutionStep
-	json.Unmarshal(data, &step)
+	if err := json.Unmarshal(data, &step); err != nil {
+		return nil, err
+	}
 	return &step, nil
 }

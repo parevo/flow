@@ -148,7 +148,10 @@ func TestMemoryStorageExecutionSteps(t *testing.T) {
 		Status:      flow.StatusPending,
 		StartedAt:   time.Now(),
 	}
-	storage.CreateExecutionStep(ctx, "default", step2)
+	err = storage.CreateExecutionStep(ctx, "default", step2)
+	if err != nil {
+		t.Fatalf("CreateExecutionStep failed: %v", err)
+	}
 
 	claimed, err := storage.ClaimReadyStep(ctx, "default", "worker-1")
 	if err != nil {
@@ -280,7 +283,10 @@ func TestEngineExecuteWorkflow(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	engine.RegisterWorkflow(ctx, "default", wf)
+	err := engine.RegisterWorkflow(ctx, "default", wf)
+	if err != nil {
+		t.Fatalf("RegisterWorkflow failed: %v", err)
+	}
 
 	workerCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
 	defer cancel()
@@ -327,13 +333,19 @@ func TestEngineGetExecutionSteps(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	engine.RegisterWorkflow(ctx, "default", wf)
+	err := engine.RegisterWorkflow(ctx, "default", wf)
+	if err != nil {
+		t.Fatalf("RegisterWorkflow failed: %v", err)
+	}
 
 	workerCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
 	defer cancel()
 	go engine.StartWorker(workerCtx, "default", "worker-steps")
 
-	execID, _ := engine.Execute(ctx, "default", "steps-test", []byte(`{}`))
+	execID, err := engine.Execute(ctx, "default", "steps-test", []byte(`{}`))
+	if err != nil {
+		t.Fatalf("Execute failed: %v", err)
+	}
 	time.Sleep(300 * time.Millisecond)
 
 	steps, err := engine.GetExecutionSteps(ctx, "default", execID)
@@ -359,12 +371,18 @@ func TestEngineCancelExecution(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	engine.RegisterWorkflow(ctx, "default", wf)
-	execID, _ := engine.Execute(ctx, "default", "cancel-test", []byte(`{}`))
+	err := engine.RegisterWorkflow(ctx, "default", wf)
+	if err != nil {
+		t.Fatalf("RegisterWorkflow failed: %v", err)
+	}
+	execID, err := engine.Execute(ctx, "default", "cancel-test", []byte(`{}`))
+	if err != nil {
+		t.Fatalf("Execute failed: %v", err)
+	}
 
 	time.Sleep(50 * time.Millisecond)
 
-	err := engine.CancelExecution(ctx, "default", execID)
+	err = engine.CancelExecution(ctx, "default", execID)
 	if err != nil {
 		t.Logf("CancelExecution: %v (may be expected)", err)
 	}
@@ -383,12 +401,18 @@ func TestEngineFailExecution(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	engine.RegisterWorkflow(ctx, "default", wf)
-	execID, _ := engine.Execute(ctx, "default", "fail-test", []byte(`{}`))
+	err := engine.RegisterWorkflow(ctx, "default", wf)
+	if err != nil {
+		t.Fatalf("RegisterWorkflow failed: %v", err)
+	}
+	execID, err := engine.Execute(ctx, "default", "fail-test", []byte(`{}`))
+	if err != nil {
+		t.Fatalf("Execute failed: %v", err)
+	}
 
 	time.Sleep(50 * time.Millisecond)
 
-	err := engine.FailExecution(ctx, "default", execID, "Test failure")
+	err = engine.FailExecution(ctx, "default", execID, "Test failure")
 	if err != nil {
 		t.Logf("FailExecution: %v (may be expected)", err)
 	}
@@ -407,12 +431,18 @@ func TestEngineSignalExecution(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	engine.RegisterWorkflow(ctx, "default", wf)
-	execID, _ := engine.Execute(ctx, "default", "signal-test", []byte(`{}`))
+	err := engine.RegisterWorkflow(ctx, "default", wf)
+	if err != nil {
+		t.Fatalf("RegisterWorkflow failed: %v", err)
+	}
+	execID, err := engine.Execute(ctx, "default", "signal-test", []byte(`{}`))
+	if err != nil {
+		t.Fatalf("Execute failed: %v", err)
+	}
 
 	time.Sleep(100 * time.Millisecond)
 
-	err := engine.SignalExecution(ctx, "default", execID, "wait", `{"approved":true}`)
+	err = engine.SignalExecution(ctx, "default", execID, "wait", `{"approved":true}`)
 	if err != nil {
 		t.Logf("SignalExecution: %v", err)
 	}
@@ -568,7 +598,10 @@ func TestWorker(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	engine.RegisterWorkflow(ctx, "default", wf)
+	err := engine.RegisterWorkflow(ctx, "default", wf)
+	if err != nil {
+		t.Fatalf("RegisterWorkflow failed: %v", err)
+	}
 
 	workerCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
 	defer cancel()
@@ -577,10 +610,16 @@ func TestWorker(t *testing.T) {
 	worker.SetNamespace("default")
 	go worker.Start(workerCtx)
 
-	execID, _ := engine.Execute(ctx, "default", "worker-test", []byte(`{}`))
+	execID, err := engine.Execute(ctx, "default", "worker-test", []byte(`{}`))
+	if err != nil {
+		t.Fatalf("Execute failed: %v", err)
+	}
 	time.Sleep(500 * time.Millisecond)
 
-	exec, _ := engine.GetExecution(ctx, "default", execID)
+	exec, err := engine.GetExecution(ctx, "default", execID)
+	if err != nil {
+		t.Fatalf("GetExecution failed: %v", err)
+	}
 	isExecuted := atomic.LoadInt32(&executed)
 	t.Logf("Status: %s, Executed: %v", exec.Status, isExecuted == 1)
 
@@ -948,9 +987,12 @@ func TestWorkflowWithInvalidNode(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	engine.RegisterWorkflow(ctx, "default", wf)
+	err := engine.RegisterWorkflow(ctx, "default", wf)
+	if err != nil {
+		t.Fatalf("RegisterWorkflow failed: %v", err)
+	}
 
-	_, err := engine.Execute(ctx, "default", "invalid-test", []byte(`{}`))
+	_, err = engine.Execute(ctx, "default", "invalid-test", []byte(`{}`))
 	if err == nil {
 		t.Error("Expected error for invalid node type")
 	}
@@ -986,7 +1028,10 @@ func TestCompleteWorkflowExecution(t *testing.T) {
 	wf := builder.Build()
 
 	ctx := context.Background()
-	engine.RegisterWorkflow(ctx, "default", wf)
+	err := engine.RegisterWorkflow(ctx, "default", wf)
+	if err != nil {
+		t.Fatalf("RegisterWorkflow failed: %v", err)
+	}
 
 	workerCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
 	defer cancel()
@@ -1000,13 +1045,19 @@ func TestCompleteWorkflowExecution(t *testing.T) {
 	// Wait for completion
 	for i := 0; i < 30; i++ {
 		time.Sleep(100 * time.Millisecond)
-		exec, _ := engine.GetExecution(ctx, "default", execID)
+		exec, err := engine.GetExecution(ctx, "default", execID)
+		if err != nil {
+			t.Fatalf("GetExecution failed: %v", err)
+		}
 		if exec.Status == flow.StatusCompleted || exec.Status == flow.StatusFailed {
 			break
 		}
 	}
 
-	exec, _ := engine.GetExecution(ctx, "default", execID)
+	exec, err := engine.GetExecution(ctx, "default", execID)
+	if err != nil {
+		t.Fatalf("GetExecution failed: %v", err)
+	}
 	t.Logf("Final status: %s", exec.Status)
 
 	if atomic.LoadInt32(&step1Done) == 0 {
@@ -1054,16 +1105,25 @@ func TestWorkflowWithRetry(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	engine.RegisterWorkflow(ctx, "default", wf)
+	err := engine.RegisterWorkflow(ctx, "default", wf)
+	if err != nil {
+		t.Fatalf("RegisterWorkflow failed: %v", err)
+	}
 
 	workerCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 	go engine.StartWorker(workerCtx, "default", "retry-worker")
 
-	execID, _ := engine.Execute(ctx, "default", "retry-test", []byte(`{}`))
+	execID, err := engine.Execute(ctx, "default", "retry-test", []byte(`{}`))
+	if err != nil {
+		t.Fatalf("Execute failed: %v", err)
+	}
 	time.Sleep(2 * time.Second)
 
-	exec, _ := engine.GetExecution(ctx, "default", execID)
+	exec, err := engine.GetExecution(ctx, "default", execID)
+	if err != nil {
+		t.Fatalf("GetExecution failed: %v", err)
+	}
 	t.Logf("Status: %s, Attempts: %d", exec.Status, attempts)
 
 	if attempts < 3 {
@@ -1092,7 +1152,10 @@ func TestConcurrentWorkflows(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	engine.RegisterWorkflow(ctx, "default", wf)
+	err := engine.RegisterWorkflow(ctx, "default", wf)
+	if err != nil {
+		t.Fatalf("RegisterWorkflow failed: %v", err)
+	}
 
 	workerCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
@@ -1136,11 +1199,14 @@ func BenchmarkWorkflowExecution(b *testing.B) {
 	}
 
 	ctx := context.Background()
-	engine.RegisterWorkflow(ctx, "default", wf)
+	err := engine.RegisterWorkflow(ctx, "default", wf)
+	if err != nil {
+		b.Fatalf("RegisterWorkflow failed: %v", err)
+	}
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		engine.Execute(ctx, "default", "bench", []byte(`{}`))
+		_, _ = engine.Execute(ctx, "default", "bench", []byte(`{}`))
 	}
 }
 

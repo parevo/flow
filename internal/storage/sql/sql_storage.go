@@ -417,7 +417,7 @@ func (s *SQLStorage) ClaimReadyStep(ctx context.Context, namespace string, worke
 	if err != nil {
 		return nil, err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 
 	// Zombie Task Recovery Logic:
 	// A task is claimable if:

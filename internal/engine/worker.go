@@ -76,7 +76,9 @@ func (w *Worker) processOne(ctx context.Context) {
 		step.Status = models.TaskCancelled
 		now := time.Now()
 		step.FinishedAt = &now
-		w.engine.storage.UpdateExecutionStep(ctx, step.Namespace, step)
+		if err := w.engine.storage.UpdateExecutionStep(ctx, step.Namespace, step); err != nil {
+			w.engine.logger.Error("Failed to update execution step for cancellation", "worker", w.id, "step", step.ID, "error", err)
+		}
 		return
 	}
 
@@ -102,7 +104,9 @@ func (w *Worker) processOne(ctx context.Context) {
 		if err.Error() == "SIGNAL_WAIT" {
 			w.engine.logger.Info("Step entering WAITING state for external signal", "worker", w.id, "step", step.ID, "node", step.NodeID)
 			step.Status = models.TaskWaiting
-			w.engine.storage.UpdateExecutionStep(ctx, step.Namespace, step)
+			if err := w.engine.storage.UpdateExecutionStep(ctx, step.Namespace, step); err != nil {
+				w.engine.logger.Error("Failed to update execution step to WAITING state", "worker", w.id, "step", step.ID, "error", err)
+			}
 			GetTelemetry().IncProcessed(step.Namespace, nodeType, "waiting")
 			return
 		}
@@ -123,7 +127,9 @@ func (w *Worker) processOne(ctx context.Context) {
 
 			w.engine.logger.Info("Rescheduling step with dynamic backoff", "worker", w.id, "step", step.ID, "next_run", nextScheduled.Format(time.RFC3339))
 			GetTelemetry().IncProcessed(step.Namespace, nodeType, "retried")
-			w.engine.storage.UpdateExecutionStep(ctx, step.Namespace, step)
+			if err := w.engine.storage.UpdateExecutionStep(ctx, step.Namespace, step); err != nil {
+				w.engine.logger.Error("Failed to update execution step for retry", "worker", w.id, "step", step.ID, "error", err)
+			}
 			return
 		}
 
@@ -134,12 +140,16 @@ func (w *Worker) processOne(ctx context.Context) {
 		step.FinishedAt = &now
 		GetTelemetry().IncProcessed(step.Namespace, nodeType, "failed")
 		GetTelemetry().ObserveDuration(step.Namespace, nodeType, duration)
-		w.engine.storage.UpdateExecutionStep(ctx, step.Namespace, step)
+		if err := w.engine.storage.UpdateExecutionStep(ctx, step.Namespace, step); err != nil {
+			w.engine.logger.Error("Failed to update execution step after max retries", "worker", w.id, "step", step.ID, "error", err)
+		}
 
 		// Check if compensation exists - if yes, don't fail execution yet
 		hasCompensation := w.handleCompensation(ctx, wf, step, exec, err)
 		if !hasCompensation {
-			w.engine.checkAndFinishExecution(ctx, exec)
+			if err := w.engine.checkAndFinishExecution(ctx, exec); err != nil {
+				w.engine.logger.Error("Failed to check and finish execution", "worker", w.id, "execution", exec.ID, "error", err)
+			}
 		}
 		return
 	}
@@ -192,7 +202,9 @@ func (w *Worker) handleCompensation(ctx context.Context, wf *models.Workflow, st
 				Input:       fmt.Sprintf(`{"reason": "compensation", "failedNode": "%s", "error": "%s"}`, n.ID, err.Error()),
 				StartedAt:   time.Now(),
 			}
-			w.engine.storage.CreateExecutionStep(ctx, step.Namespace, compStep)
+			if err := w.engine.storage.CreateExecutionStep(ctx, step.Namespace, compStep); err != nil {
+				w.engine.logger.Error("Failed to create compensation step", "execution", exec.ID, "step", compStep.ID, "error", err)
+			}
 			return true // Compensation exists, don't fail execution yet
 		}
 	}

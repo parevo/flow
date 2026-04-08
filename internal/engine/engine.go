@@ -159,7 +159,7 @@ func (e *Engine) CompleteStep(ctx context.Context, step *models.ExecutionStep, o
 						if s.NodeID == pID {
 							// In aggregation, use the latest output of each predecessor
 							var outData interface{}
-							_ = json.Unmarshal([]byte(s.Output), &outData)
+							json.Unmarshal([]byte(s.Output), &outData)
 							aggMap[pID] = outData
 						}
 					}
@@ -251,7 +251,7 @@ func (e *Engine) mergeSignalData(existingInput string, signalData string) string
 	// Parse existing input
 	var inputMap map[string]interface{}
 	if existingInput != "" {
-		_ = json.Unmarshal([]byte(existingInput), &inputMap)
+		json.Unmarshal([]byte(existingInput), &inputMap)
 	}
 	if inputMap == nil {
 		inputMap = make(map[string]interface{})
@@ -288,7 +288,10 @@ func (e *Engine) skipNode(ctx context.Context, exec *models.Execution, g *Graph,
 	}
 	now := time.Now()
 	step.FinishedAt = &now
-	e.storage.CreateExecutionStep(ctx, exec.Namespace, step)
+	if err := e.storage.CreateExecutionStep(ctx, exec.Namespace, step); err != nil {
+		e.logger.Error("Failed to create skipped step", "node", nodeID, "execution", exec.ID, "error", err)
+		return
+	}
 	e.logger.Debug("Skipping node", "node", nodeID, "execution", exec.ID)
 
 	// 3. Propagate to children
@@ -342,7 +345,9 @@ func (e *Engine) skipNode(ctx context.Context, exec *models.Execution, g *Graph,
 					Input:       "", // Or merge inputs?
 					StartedAt:   time.Now(),
 				}
-				e.storage.CreateExecutionStep(ctx, exec.Namespace, newStep)
+				if err := e.storage.CreateExecutionStep(ctx, exec.Namespace, newStep); err != nil {
+					e.logger.Error("Failed to create step after skip propagation", "node", childID, "execution", exec.ID, "error", err)
+				}
 			}
 		}
 	}
@@ -384,8 +389,12 @@ func (e *Engine) ReapTimeouts(ctx context.Context, namespace string) error {
 									step.Error = "SIGNAL_TIMEOUT"
 									now := time.Now()
 									step.FinishedAt = &now
-									e.storage.UpdateExecutionStep(ctx, namespace, step)
-									e.checkAndFinishExecution(ctx, exec)
+									if err := e.storage.UpdateExecutionStep(ctx, namespace, step); err != nil {
+										e.logger.Error("Failed to update timed out step", "step", step.ID, "error", err)
+									}
+									if err := e.checkAndFinishExecution(ctx, exec); err != nil {
+										e.logger.Error("Failed to finish execution after timeout", "execution", exec.ID, "error", err)
+									}
 								}
 							}
 						}

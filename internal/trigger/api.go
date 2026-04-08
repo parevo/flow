@@ -19,7 +19,7 @@ func NewAPIManager(wm *WebhookManager) *APIManager {
 
 func (m *APIManager) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	path := strings.Trim(r.URL.Path, "/")
-	
+
 	// 1. Prometheus Metrics (Standard Implementation)
 	if path == "metrics" {
 		promhttp.Handler().ServeHTTP(w, r)
@@ -29,7 +29,7 @@ func (m *APIManager) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// 2. Health Check
 	if path == "health" {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("OK"))
+		_, _ = w.Write([]byte("OK"))
 		return
 	}
 
@@ -63,7 +63,7 @@ func (m *APIManager) handleManagementAPI(w http.ResponseWriter, r *http.Request,
 		if len(parts) == 3 {
 			// List executions (Placeholder: actually needs storage call)
 			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(map[string]interface{}{"namespace": namespace, "executions": []string{}})
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"namespace": namespace, "executions": []string{}})
 			return
 		}
 		if len(parts) == 4 {
@@ -75,7 +75,7 @@ func (m *APIManager) handleManagementAPI(w http.ResponseWriter, r *http.Request,
 				return
 			}
 			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(exec)
+			_ = json.NewEncoder(w).Encode(exec)
 			return
 		}
 		if len(parts) == 5 && parts[4] == "cancel" {
@@ -91,7 +91,7 @@ func (m *APIManager) handleManagementAPI(w http.ResponseWriter, r *http.Request,
 				return
 			}
 			w.WriteHeader(http.StatusOK)
-			w.Write([]byte(`{"status":"cancelled"}`))
+			_, _ = w.Write([]byte(`{"status":"cancelled"}`))
 			return
 		}
 		if len(parts) == 6 && parts[4] == "signal" {
@@ -115,7 +115,7 @@ func (m *APIManager) handleManagementAPI(w http.ResponseWriter, r *http.Request,
 				return
 			}
 			w.WriteHeader(http.StatusOK)
-			w.Write([]byte(`{"status":"signaled"}`))
+			_, _ = w.Write([]byte(`{"status":"signaled"}`))
 			return
 		}
 	}

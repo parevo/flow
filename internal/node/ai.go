@@ -49,7 +49,7 @@ func (n *AINode) Execute(ctx context.Context, config map[string]interface{}, inp
 	// Parse input JSON
 	var inputMap map[string]interface{}
 	if input != "" {
-		_ = json.Unmarshal([]byte(input), &inputMap)
+		json.Unmarshal([]byte(input), &inputMap)
 	}
 	if inputMap == nil {
 		inputMap = make(map[string]interface{})
