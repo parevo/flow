@@ -7,56 +7,176 @@
   <meta name="description" content="Production-ready workflow orchestration engine for Go applications. Dual-language (EN/TR) documentation.">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0">
   
-  <!-- Premium Dark Theme stylesheet -->
-  <link rel="stylesheet" href="//cdn.jsdelivr.net/npm/docsify-themeable@0/dist/css/themeable/themes/dark.css">
+  <!-- Local Docsify Dark Theme (No CDN dependence) -->
+  <link rel="stylesheet" href="assets/docsify.css">
   
-  <!-- Custom variables for high-fidelity aesthetics -->
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  
+  <!-- Premium Custom Styling Overrides -->
   <style>
-    :root {
-      --theme-color: #10b981; /* emerald accent */
-      --base-font-family: 'Inter', system-ui, -apple-system, sans-serif;
-      --code-font-family: 'JetBrains Mono', 'Fira Code', monospace;
-      --sidebar-width: 280px;
-      --content-max-width: 900px;
-      --mono-hue-base: 220; /* custom slate background hues */
-      --background: #0f172a;
-      --sidebar-background: #0b0f19;
+    /* Dark Slate & Emerald Color Scheme */
+    body {
+      font-family: 'Inter', sans-serif !important;
+      background-color: #0f172a !important; /* slate-900 */
+      color: #cbd5e1 !important; /* slate-300 */
+      -webkit-font-smoothing: antialiased;
     }
     
-    /* Code block styling enhancements */
-    pre[class*="language-"] {
-      border: 1px solid rgba(255,255,255,0.05);
-      border-radius: 8px !important;
-      box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+    /* Sidebar Styling */
+    .sidebar {
+      background-color: #0b0f19 !important; /* slate-950 */
+      border-right: 1px solid rgba(255, 255, 255, 0.05) !important;
+      color: #94a3b8 !important;
+    }
+    
+    .sidebar-nav a {
+      color: #94a3b8 !important;
+      transition: color 0.15s ease;
+    }
+    
+    .sidebar-nav a:hover {
+      color: #10b981 !important;
+      text-decoration: none !important;
+    }
+    
+    .sidebar-nav li.active > a {
+      color: #10b981 !important;
+      font-weight: 600 !important;
+      border-right: 2px solid #10b981;
+    }
+    
+    .sidebar::-webkit-scrollbar {
+      width: 6px;
+    }
+    
+    .sidebar::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 3px;
+    }
+
+    /* Main Content Area */
+    .markdown-section {
+      max-width: 850px !important;
+      margin: 0 auto;
+      padding: 40px 25px !important;
+    }
+
+    h1, h2, h3, h4 {
+      font-weight: 700 !important;
+      color: #f8fafc !important; /* slate-50 */
+      margin-top: 2rem !important;
+    }
+    
+    h1 {
+      font-size: 2.25rem !important;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      padding-bottom: 0.5rem;
+    }
+    
+    h2 {
+      font-size: 1.75rem !important;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+      padding-bottom: 0.4rem;
+    }
+
+    a {
+      color: #10b981 !important;
+      font-weight: 500;
+      text-decoration: none;
+    }
+    
+    a:hover {
+      text-decoration: underline !important;
+    }
+
+    /* Inline & Block Code Customization */
+    code {
+      font-family: 'JetBrains Mono', monospace !important;
+      background-color: #1e293b !important; /* slate-800 */
+      color: #38bdf8 !important; /* sky-400 */
+      padding: 3px 6px !important;
+      border-radius: 5px !important;
+      font-size: 0.9rem !important;
+    }
+    
+    pre code {
+      background-color: transparent !important;
+      color: #e2e8f0 !important;
+      padding: 0 !important;
+      font-size: 0.9rem !important;
+    }
+
+    pre {
       background-color: #0b0f19 !important;
+      border: 1px solid rgba(255, 255, 255, 0.06) !important;
+      border-radius: 8px !important;
+      padding: 20px !important;
+      box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.2);
     }
     
-    /* Custom language switcher button */
+    /* Search Bar Customization */
+    .search input {
+      background-color: #1e293b !important;
+      border: 1px solid rgba(255, 255, 255, 0.1) !important;
+      color: #f8fafc !important;
+      border-radius: 6px !important;
+      padding: 10px 15px !important;
+    }
+    
+    .search input:focus {
+      border-color: #10b981 !important;
+      box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.2) !important;
+      outline: none;
+    }
+    
+    .search .clear-button {
+      color: #94a3b8 !important;
+    }
+    
+    /* Custom Language Toggle Button */
     .lang-switcher {
       position: fixed;
       top: 15px;
-      right: 80px;
+      right: 25px;
       z-index: 100;
       background: rgba(16, 185, 129, 0.15);
-      border: 1px solid var(--theme-color);
-      color: #fff;
-      padding: 6px 12px;
+      border: 1px solid #10b981;
+      color: #fff !important;
+      padding: 8px 16px;
       border-radius: 20px;
       font-size: 0.85rem;
       font-weight: 600;
       cursor: pointer;
-      backdrop-filter: blur(10px);
-      transition: all 0.2s ease;
-      text-decoration: none;
+      backdrop-filter: blur(12px);
+      transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+      text-decoration: none !important;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
     }
     
     .lang-switcher:hover {
-      background: var(--theme-color);
-      color: #000;
-      box-shadow: 0 0 12px rgba(16, 185, 129, 0.4);
+      background: #10b981;
+      color: #000 !important;
+      box-shadow: 0 0 16px rgba(16, 185, 129, 0.5);
+      transform: translateY(-1px);
+    }
+    
+    .lang-switcher:active {
+      transform: translateY(0);
+    }
+    
+    /* Markdown Blockquotes (Alerts/Tips) styling */
+    blockquote {
+      border-left: 4px solid #10b981 !important;
+      background: rgba(16, 185, 129, 0.05);
+      color: #94a3b8 !important;
+      padding: 15px 20px !important;
+      margin: 1.5rem 0 !important;
+      border-radius: 0 8px 8px 0;
     }
   </style>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 </head>
 <body>
   <div id="app">Loading documentation...</div>
@@ -71,8 +191,9 @@
       loadSidebar: true,
       subMaxLevel: 3,
       auto2top: true,
+      themeColor: '#10b981', // Emerald green theme accent
       
-      // Search configuration
+      // Search plugin configuration
       search: {
         maxAge: 86400000,
         paths: 'auto',
@@ -87,7 +208,7 @@
         depth: 4
       },
       
-      // Copy code configuration
+      // Copy code plugin configuration
       copyCode: {
         buttonText: {
           '/tr/': 'Kopyala',
@@ -120,15 +241,14 @@
     window.addEventListener('DOMContentLoaded', updateLangButton);
   </script>
 
-  <!-- Docsify Core and Plugins -->
-  <script src="//cdn.jsdelivr.net/npm/docsify@4"></script>
-  <script src="//cdn.jsdelivr.net/npm/docsify-themeable@0"></script>
-  <script src="//cdn.jsdelivr.net/npm/docsify/lib/plugins/search.min.js"></script>
-  <script src="//cdn.jsdelivr.net/npm/docsify-copy-code/dist/docsify-copy-code.min.js"></script>
+  <!-- Local Docsify Core and Plugins -->
+  <script src="assets/docsify.js"></script>
+  <script src="assets/search.js"></script>
+  <script src="assets/copy-code.js"></script>
 
-  <!-- Syntax Highlighters for workflow code blocks -->
-  <script src="//cdn.jsdelivr.net/npm/prismjs@1/components/prism-go.min.js"></script>
-  <script src="//cdn.jsdelivr.net/npm/prismjs@1/components/prism-json.min.js"></script>
-  <script src="//cdn.jsdelivr.net/npm/prismjs@1/components/prism-bash.min.js"></script>
+  <!-- Local Syntax Highlighters for code blocks -->
+  <script src="assets/prism-go.js"></script>
+  <script src="assets/prism-json.js"></script>
+  <script src="assets/prism-bash.js"></script>
 </body>
 </html>
