@@ -458,12 +458,12 @@ func (s *SQLStorage) ClaimReadyStep(ctx context.Context, namespace string, worke
 		return nil, err
 	}
 
-	updateQuery := "UPDATE execution_steps SET status = ?, worker_id = ?, started_at = ? WHERE id = ? AND namespace = ?"
+	updateQuery := "UPDATE execution_steps SET status = ?, worker_id = ?, started_at = ?, updated_at = ? WHERE id = ? AND namespace = ?"
 	if _, ok := s.dialect.(PostgresDialect); ok {
-		updateQuery = "UPDATE execution_steps SET status = $1, worker_id = $2, started_at = $3 WHERE id = $4 AND namespace = $5"
+		updateQuery = "UPDATE execution_steps SET status = $1, worker_id = $2, started_at = $3, updated_at = $4 WHERE id = $5 AND namespace = $6"
 	}
 
-	_, err = tx.ExecContext(ctx, updateQuery, "RUNNING", workerID, time.Now(), step.ID, step.Namespace)
+	_, err = tx.ExecContext(ctx, updateQuery, "RUNNING", workerID, time.Now(), time.Now(), step.ID, step.Namespace)
 	if err != nil {
 		return nil, err
 	}

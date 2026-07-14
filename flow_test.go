@@ -5,7 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"net/http"
+	"net/http/httptest"
 	"os"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -1622,4 +1625,259 @@ func BenchmarkCrypto(b *testing.B) {
 		encrypted, _ := crypto.Encrypt(plaintext)
 		_, _ = crypto.Decrypt(encrypted)
 	}
+}
+
+func TestHTTPNodeExecution(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"status": "ok", "message": "hello"}`))
+	}))
+	defer server.Close()
+
+	storage := flow.NewMemoryStorage()
+	registry := flow.NewRegistry()
+	engine := flow.NewEngine(storage, registry)
+	ctx := context.Background()
+
+	wfBuilder := flow.NewWorkflow("http-wf", "HTTP Test")
+	wfBuilder.AddNode("http_task", flow.NodeTypeHTTP).
+		WithConfig("url", server.URL).
+		WithConfig("method", "GET")
+	wf := wfBuilder.Build()
+
+	_ = engine.RegisterWorkflow(ctx, "default", wf)
+	go engine.StartWorker(ctx, "default", "http-worker")
+
+	execID, err := engine.Execute(ctx, "default", "http-wf", []byte(`{}`))
+	if err != nil {
+		t.Fatalf("Failed to execute: %v", err)
+	}
+
+	var exec *flow.Execution
+	for i := 0; i < 20; i++ {
+		exec, err = engine.GetExecution(ctx, "default", execID)
+		if err == nil && (exec.Status == flow.StatusCompleted || exec.Status == flow.StatusFailed) {
+			break
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+
+	if exec.Status != flow.StatusCompleted {
+		t.Fatalf("Expected status COMPLETED, got %s. Error: %s", exec.Status, exec.ErrorMessage)
+	}
+
+	var outputMap map[string]interface{}
+	_ = json.Unmarshal([]byte(exec.Output), &outputMap)
+	if outputMap["status"] != "ok" {
+		t.Errorf("Expected status ok, got %v", outputMap["status"])
+	}
+}
+
+func TestNotifyNodeExecution(t *testing.T) {
+	var received map[string]interface{}
+	var mu sync.Mutex
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		defer mu.Unlock()
+		_ = json.NewDecoder(r.Body).Decode(&received)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	storage := flow.NewMemoryStorage()
+	registry := flow.NewRegistry()
+	engine := flow.NewEngine(storage, registry)
+	ctx := context.Background()
+
+	wfBuilder := flow.NewWorkflow("notify-wf", "Notify Test")
+	wfBuilder.AddNode("notify_task", flow.NodeTypeNotify).
+		WithConfig("url", server.URL).
+		WithConfig("method", "POST").
+		WithConfig("body", `{"payload": "{{.message}}"}`)
+	wf := wfBuilder.Build()
+
+	_ = engine.RegisterWorkflow(ctx, "default", wf)
+	go engine.StartWorker(ctx, "default", "notify-worker")
+
+	execID, err := engine.Execute(ctx, "default", "notify-wf", []byte(`{"message": "alert 123"}`))
+	if err != nil {
+		t.Fatalf("Failed to execute: %v", err)
+	}
+
+	var exec *flow.Execution
+	for i := 0; i < 20; i++ {
+		exec, err = engine.GetExecution(ctx, "default", execID)
+		if err == nil && (exec.Status == flow.StatusCompleted || exec.Status == flow.StatusFailed) {
+			break
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+
+	if exec.Status != flow.StatusCompleted {
+		t.Fatalf("Expected status COMPLETED, got %s. Error: %s", exec.Status, exec.ErrorMessage)
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	if received == nil {
+		t.Fatal("Mock server did not receive webhook")
+	}
+	if received["payload"] != "alert 123" {
+		t.Errorf("Expected payload 'alert 123', got %v", received["payload"])
+	}
+}
+
+func TestSubWorkflowNodeExecution(t *testing.T) {
+	storage := flow.NewMemoryStorage()
+	registry := flow.NewRegistry()
+	engine := flow.NewEngine(storage, registry)
+	ctx := context.Background()
+
+	registry.RegisterFunction("child_task", func(ctx context.Context, input map[string]interface{}) (map[string]interface{}, error) {
+		name := input["name"].(string)
+		return map[string]interface{}{"greeting": "Hello " + name}, nil
+	})
+
+	childWfBuilder := flow.NewWorkflow("child-wf", "Child")
+	childWfBuilder.AddNode("run_child", flow.NodeTypeFunction).
+		WithConfig("function", "child_task")
+	childWf := childWfBuilder.Build()
+
+	_ = engine.RegisterWorkflow(ctx, "default", childWf)
+
+	parentWfBuilder := flow.NewWorkflow("parent-wf", "Parent")
+	parentWfBuilder.AddNode("run_sub", flow.NodeTypeSubWorkflow).
+		WithConfig("workflowId", "child-wf").
+		WithConfig("namespace", "default")
+	parentWf := parentWfBuilder.Build()
+
+	_ = engine.RegisterWorkflow(ctx, "default", parentWf)
+
+	go engine.StartWorker(ctx, "default", "parent-worker-1")
+	go engine.StartWorker(ctx, "default", "parent-worker-2")
+
+	execID, err := engine.Execute(ctx, "default", "parent-wf", []byte(`{"name": "Alice"}`))
+	if err != nil {
+		t.Fatalf("Failed to execute: %v", err)
+	}
+
+	var exec *flow.Execution
+	for i := 0; i < 30; i++ {
+		exec, err = engine.GetExecution(ctx, "default", execID)
+		if err == nil && (exec.Status == flow.StatusCompleted || exec.Status == flow.StatusFailed) {
+			break
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+
+	if exec.Status != flow.StatusCompleted {
+		t.Fatalf("Expected status COMPLETED, got %s. Error: %s", exec.Status, exec.ErrorMessage)
+	}
+
+	var outputMap map[string]interface{}
+	_ = json.Unmarshal([]byte(exec.Output), &outputMap)
+	if outputMap["greeting"] != "Hello Alice" {
+		t.Errorf("Expected greeting 'Hello Alice', got %v", outputMap["greeting"])
+	}
+}
+
+type mockEventHandler struct {
+	count int32
+}
+
+func (h *mockEventHandler) HandleEvent(ctx context.Context, event flow.Event) error {
+	atomic.AddInt32(&h.count, 1)
+	return nil
+}
+
+func TestEventBusConcurrency(t *testing.T) {
+	eventBus := flow.NewEventBus()
+	ctx := context.Background()
+
+	var wg sync.WaitGroup
+	workersCount := 10
+	iterations := 100
+
+	for i := 0; i < workersCount; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for j := 0; j < iterations; j++ {
+				eventBus.RegisterHandler(flow.EventWorkflowCompleted, &mockEventHandler{})
+				eventBus.RegisterGlobalHandler(&mockEventHandler{})
+			}
+		}()
+	}
+
+	for i := 0; i < workersCount; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for j := 0; j < iterations; j++ {
+				eventBus.Emit(ctx, flow.Event{
+					Type:      flow.EventWorkflowCompleted,
+					Namespace: "default",
+				})
+				_ = eventBus.EmitSync(ctx, flow.Event{
+					Type:      flow.EventWorkflowCompleted,
+					Namespace: "default",
+				})
+			}
+		}()
+	}
+
+	wg.Wait()
+	t.Log("✅ EventBus concurrency test completed without data races")
+}
+
+func TestWorkerPanicRecovery(t *testing.T) {
+	storage := flow.NewMemoryStorage()
+	registry := flow.NewRegistry()
+	engine := flow.NewEngine(storage, registry)
+	ctx := context.Background()
+
+	registry.RegisterFunction("panicking_task", func(ctx context.Context, input map[string]interface{}) (map[string]interface{}, error) {
+		panic("something went terribly wrong")
+	})
+
+	wfBuilder := flow.NewWorkflow("panic-wf", "Panic Test")
+	wfBuilder.AddNode("run_panic", flow.NodeTypeFunction).
+		WithConfig("function", "panicking_task")
+	wf := wfBuilder.Build()
+
+	_ = engine.RegisterWorkflow(ctx, "default", wf)
+	go engine.StartWorker(ctx, "default", "panic-worker")
+
+	execID, err := engine.Execute(ctx, "default", "panic-wf", []byte(`{}`))
+	if err != nil {
+		t.Fatalf("Failed to execute: %v", err)
+	}
+
+	var exec *flow.Execution
+	for i := 0; i < 20; i++ {
+		exec, err = engine.GetExecution(ctx, "default", execID)
+		if err == nil && (exec.Status == flow.StatusCompleted || exec.Status == flow.StatusFailed) {
+			break
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+
+	if exec.Status != flow.StatusFailed {
+		t.Fatalf("Expected status FAILED on panic, got %s", exec.Status)
+	}
+
+	steps, err := engine.GetExecutionSteps(ctx, "default", execID)
+	if err != nil {
+		t.Fatalf("Failed to get steps: %v", err)
+	}
+
+	if len(steps) != 1 {
+		t.Fatalf("Expected 1 step, got %d", len(steps))
+	}
+
+	if steps[0].Status != flow.StatusFailed {
+		t.Errorf("Expected step status FAILED, got %s", steps[0].Status)
+	}
+
+	t.Logf("✅ Worker recovered from panic successfully: %s", steps[0].Error)
 }

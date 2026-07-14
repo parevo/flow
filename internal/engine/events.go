@@ -2,6 +2,7 @@ package engine
 
 import (
 	"context"
+	"sync"
 
 	"github.com/parevo/flow/internal/models"
 )
@@ -41,6 +42,7 @@ type EventHandler interface {
 
 // EventBus manages event handlers
 type EventBus struct {
+	mu       sync.RWMutex
 	handlers map[EventType][]EventHandler
 }
 
@@ -52,11 +54,15 @@ func NewEventBus() *EventBus {
 
 // RegisterHandler adds an event handler for specific event type
 func (eb *EventBus) RegisterHandler(eventType EventType, handler EventHandler) {
+	eb.mu.Lock()
+	defer eb.mu.Unlock()
 	eb.handlers[eventType] = append(eb.handlers[eventType], handler)
 }
 
 // RegisterGlobalHandler adds a handler for ALL events
 func (eb *EventBus) RegisterGlobalHandler(handler EventHandler) {
+	eb.mu.Lock()
+	defer eb.mu.Unlock()
 	for eventType := range eb.handlers {
 		eb.handlers[eventType] = append(eb.handlers[eventType], handler)
 	}
@@ -86,10 +92,15 @@ func (eb *EventBus) RegisterGlobalHandler(handler EventHandler) {
 
 // Emit sends event to all registered handlers (async, non-blocking)
 func (eb *EventBus) Emit(ctx context.Context, event Event) {
-	handlers := eb.handlers[event.Type]
-	if len(handlers) == 0 {
+	eb.mu.RLock()
+	handlersList := eb.handlers[event.Type]
+	if len(handlersList) == 0 {
+		eb.mu.RUnlock()
 		return
 	}
+	handlers := make([]EventHandler, len(handlersList))
+	copy(handlers, handlersList)
+	eb.mu.RUnlock()
 
 	// Execute handlers asynchronously to not block workflow execution
 	for _, handler := range handlers {
@@ -102,10 +113,15 @@ func (eb *EventBus) Emit(ctx context.Context, event Event) {
 
 // EmitSync sends event synchronously (blocking, waits for all handlers)
 func (eb *EventBus) EmitSync(ctx context.Context, event Event) []error {
-	handlers := eb.handlers[event.Type]
-	if len(handlers) == 0 {
+	eb.mu.RLock()
+	handlersList := eb.handlers[event.Type]
+	if len(handlersList) == 0 {
+		eb.mu.RUnlock()
 		return nil
 	}
+	handlers := make([]EventHandler, len(handlersList))
+	copy(handlers, handlersList)
+	eb.mu.RUnlock()
 
 	var errors []error
 	for _, handler := range handlers {

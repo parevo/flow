@@ -22,6 +22,10 @@ func NewSubWorkflowNode(e SubWorkflowEngine) *SubWorkflowNode {
 	return &SubWorkflowNode{engine: e}
 }
 
+func (s *SubWorkflowNode) SetEngine(e SubWorkflowEngine) {
+	s.engine = e
+}
+
 func (s *SubWorkflowNode) Execute(ctx context.Context, config map[string]interface{}, input string) (string, error) {
 	childWFID, _ := config["workflowId"].(string)
 	namespace, _ := config["namespace"].(string)

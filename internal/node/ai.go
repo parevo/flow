@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"time"
 )
 
 // AINode represents a node that calls AI APIs (OpenAI, Anthropic, Gemini)
@@ -174,7 +175,7 @@ func (n *AINode) callOpenAI(ctx context.Context, apiKey, model, systemPrompt, pr
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+apiKey)
 
-	client := &http.Client{}
+	client := &http.Client{Timeout: 30 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
 		return "", err
@@ -241,7 +242,7 @@ func (n *AINode) callAnthropic(ctx context.Context, apiKey, model, systemPrompt,
 	req.Header.Set("x-api-key", apiKey)
 	req.Header.Set("anthropic-version", "2023-06-01")
 
-	client := &http.Client{}
+	client := &http.Client{Timeout: 30 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
 		return "", err
@@ -316,7 +317,7 @@ func (n *AINode) callGemini(ctx context.Context, apiKey, model, prompt string, t
 
 	req.Header.Set("Content-Type", "application/json")
 
-	client := &http.Client{}
+	client := &http.Client{Timeout: 30 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
 		return "", err

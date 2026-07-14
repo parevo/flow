@@ -41,6 +41,20 @@ func (w *Worker) Start(ctx context.Context) {
 	ticker := time.NewTicker(w.interval)
 	defer ticker.Stop()
 
+	// Automatically fail signal-waiting tasks that exceed timeout in the background
+	go func() {
+		reapTicker := time.NewTicker(30 * time.Second)
+		defer reapTicker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-reapTicker.C:
+				_ = w.engine.ReapTimeouts(ctx, w.namespace)
+			}
+		}
+	}()
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -60,7 +74,27 @@ func (w *Worker) processOne(ctx context.Context) {
 		w.running = false
 	}()
 
-	step, err := w.engine.storage.ClaimReadyStep(ctx, w.namespace, w.id)
+	var step *models.ExecutionStep
+	defer func() {
+		if r := recover(); r != nil {
+			w.engine.logger.Error("Worker panic recovered", "worker", w.id, "panic", r)
+			if step != nil {
+				step.Status = models.TaskFailed
+				step.Error = fmt.Sprintf("Panic: %v", r)
+				now := time.Now()
+				step.FinishedAt = &now
+				_ = w.engine.storage.UpdateExecutionStep(ctx, step.Namespace, step)
+
+				exec, err := w.engine.storage.GetExecution(ctx, step.Namespace, step.ExecutionID)
+				if err == nil {
+					_ = w.engine.FailExecution(ctx, step.Namespace, exec.ID, step.Error)
+				}
+			}
+		}
+	}()
+
+	var err error
+	step, err = w.engine.storage.ClaimReadyStep(ctx, w.namespace, w.id)
 	if err != nil {
 		w.engine.logger.Error("Failed to claim step", "id", w.id, "error", err)
 		return

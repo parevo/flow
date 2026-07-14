@@ -154,20 +154,25 @@ func NewEngine(storage Storage, registry *Registry) *Engine {
 	funcNode := node.NewFunctionNode()
 	funcNode.SetRegistry(registry.Registry)
 
+	subWFNode := node.NewSubWorkflowNode(nil)
+
 	registry.Register("function", funcNode)
-	registry.Register("http", &node.HTTPNode{})
+	registry.Register("http", node.NewHTTPNode())
 	registry.Register("condition", &node.ConditionNode{})
 	registry.Register("log", &node.LogNode{})
 	registry.Register("transform", &node.TransformNode{})
 	registry.Register("signal", &node.SignalNode{})
-	registry.Register("subworkflow", &node.SubWorkflowNode{})
+	registry.Register("subworkflow", subWFNode)
 	registry.Register("ai", &node.AINode{})
-	registry.Register("notify", &node.NotifyNode{})
+	registry.Register("notify", node.NewNotifyNode())
 	registry.Register("switch", &node.SwitchNode{})
 	registry.Register("wait", &node.WaitNode{})
 	registry.Register("setvariable", &node.SetVariableNode{})
 
-	return &Engine{engine.NewEngine(storage, registry.Registry)}
+	eng := &Engine{engine.NewEngine(storage, registry.Registry)}
+	subWFNode.SetEngine(eng)
+
+	return eng
 }
 
 // WithLogger sets a custom logger for the engine
